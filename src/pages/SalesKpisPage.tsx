@@ -2,7 +2,8 @@ import { useState } from 'react';
 import Plot from 'react-plotly.js';
 import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
-import { requestAllJobActivities, requestJobStatuses, type JnActivity } from '../lib/job_nimbus/api';
+import { getAllJobActivities, getJobStatuses } from '../lib/job_nimbus/api';
+import type { JnActivity } from '../lib/job_nimbus/types';
 
 const DEFAULT_GRAPH_SETTINGS = 'a: b, c\nd: e, f';
 
@@ -22,8 +23,8 @@ function SalesKpisPage() {
 	});
 
 	const calculateSankeyData = async () => {
-		const statuses = await requestJobStatuses();
-		const activities = await requestAllJobActivities();
+		const statuses = await getJobStatuses();
+		const activities = await getAllJobActivities();
 		const activitiesByJobJnid = activities.reduce((acc, activity) => {
 			acc[activity.primaryJnid] = [...(acc[activity.primaryJnid] ?? []), activity];
 			return acc;

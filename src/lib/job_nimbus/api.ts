@@ -1,148 +1,9 @@
+// functions for interacting with the JobNimbus API and parsing the responses
+
 import { assertArray, assertObject } from "../types";
-
-export const JobMilestone = {
-    LEAD_ACQUIRED: "Lead Acquired",
-    APPOINTMENT_MADE: "Appointment Made",
-    CONTINGENCY_SIGNED: "Contingency Signed",
-    CONTRACT_SIGNED: "Contract Signed",
-    INSTALLED: "Installed",
-    LOST: "Lost",
-} as const;
-export type JobMilestone = (typeof JobMilestone)[keyof typeof JobMilestone];
-
-export interface JobStatus {
-    id: number;
-    name: string;
-}
-
-export type JobStatusRegistry = Record<number, JobStatus>;
-
-// export const JobInsuranceStatus = {
-//     INSURANCE_WITH_CONTINGENCY: "Insurance With Contingency",
-//     INSURANCE_WITHOUT_CONTINGENCY: "Insurance Without Contingency",
-//     RETAIL: "Retail",
-// } as const;
-// export type JobInsuranceStatus = (typeof JobInsuranceStatus)[keyof typeof JobInsuranceStatus];
-
-export type MilestoneDates = Record<JobMilestone, Date | null>;
-
-export interface JobLeadSource {
-    id: number;
-    name: string;
-}
-export type JobLeadSourceRegistry = Record<number, JobLeadSource>;
-
-export interface JobBaseData {
-    jnid: string;
-    milestoneDates: MilestoneDates;
-    status: JobStatus;
-    statusModDate?: Date | null;
-    salesRep?: string | null;
-    insuranceCheckbox: boolean;
-    insuranceClaimNumber?: string | null;
-    insuranceCompanyName?: string | null;
-    jobNumber?: string | null;
-    jobName?: string | null;
-    // amount in cents
-    amtReceivable: number;
-}
-
-const RAW_JOB_BASE_DATA_KEYS = {
-    JNID: "jnid",
-    STATUS: "status",
-    DATE_STATUS_CHANGE: "date_status_change",
-    SALES_REP_NAME: "sales_rep_name",
-    INSURANCE_CHECKBOX: "Insurance Job?",
-    INSURANCE_COMPANY_NAME: "Insurance Company",
-    INSURANCE_CLAIM_NUMBER: "Claim #",
-    JOB_NUMBER: "number",
-    JOB_NAME: "name",
-    AMT_RECEIVABLE: "approved_invoice_due",
-    APPOINTMENT_DATE: "Sales Appt Date",
-    CONTINGENCY_DATE: "Signed Contingency Date",
-    CONTRACT_DATE: "Signed Contract Date",
-    INSTALL_DATE: "Install Date",
-    LOSS_DATE: "Job Lost Date (Lost Status)",
-}
-
-export function parseJobBaseData(
-    raw: Record<string, unknown>,
-    statuses: JobStatusRegistry,
-): JobBaseData {
-    const getNonEmptyString = (key: string): string | null => {
-        const value = raw[key];
-        return typeof value === "string" && value.trim() ? value : null;
-    };
-    const getTimestampNonZero = (key: string): Date | null => {
-        const value = raw[key];
-        if (typeof value === "number" && value !== 0) {
-            const date = new Date(value * 1000);
-            return Number.isNaN(date.getTime()) ? null : date;
-        }
-        return null;
-    };
-    const getNumber = (key: string): number | null => {
-        const value = raw[key];
-        if (typeof value === "number") {
-            return value;
-        }
-        return null;
-    };
-
-    const jnid = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JNID);
-    if (jnid === null) {
-        throw new Error("Missing or invalid jnid field");
-    }
-
-    // get the job status
-    const statusIdValue = getNumber(RAW_JOB_BASE_DATA_KEYS.STATUS);
-    const status = statusIdValue ? statuses[statusIdValue] : undefined;
-    if (!status) {
-        throw new Error(`Unknown status id: ${statusIdValue}`);
-    }
-
-    // get the last status update
-    const statusModDate = getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.DATE_STATUS_CHANGE);
-
-    // optional fields
-    const salesRep = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.SALES_REP_NAME);
-    const insuranceCheckbox = Boolean(raw[RAW_JOB_BASE_DATA_KEYS.INSURANCE_CHECKBOX]);
-    const insuranceCompanyName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_COMPANY_NAME);
-    const insuranceClaimNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_CLAIM_NUMBER);
-    const jobNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NUMBER);
-    const jobName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NAME);
-
-    // get the amount receivable
-    let amtReceivable = 0;
-    const amountValue = raw[RAW_JOB_BASE_DATA_KEYS.AMT_RECEIVABLE];
-    if (typeof amountValue === "number") {
-        amtReceivable = Math.trunc(amountValue * 100);
-    }
-
-    // get milestone dates, keyed by milestone string value
-    const milestoneDates: MilestoneDates = {
-        [JobMilestone.LEAD_ACQUIRED]: null,
-        [JobMilestone.APPOINTMENT_MADE]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.APPOINTMENT_DATE),
-        [JobMilestone.CONTINGENCY_SIGNED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.CONTINGENCY_DATE),
-        [JobMilestone.CONTRACT_SIGNED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.CONTRACT_DATE),
-        [JobMilestone.INSTALLED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.INSTALL_DATE),
-        [JobMilestone.LOST]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.LOSS_DATE),
-    };
-
-    return {
-        jnid,
-        milestoneDates,
-        status,
-        statusModDate,
-        salesRep,
-        insuranceCheckbox,
-        insuranceClaimNumber,
-        insuranceCompanyName,
-        jobNumber,
-        jobName,
-        amtReceivable,
-    };
-}
+import { jnCacheLoad, jnCacheStore } from "./indexed_db";
+import { JobMilestone } from "./types";
+import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./types";
 
 export class ApiKeyError extends Error {
     /// The API key that was used when the error occurred, or null if one wa
@@ -156,6 +17,7 @@ export class ApiKeyError extends Error {
     }
 }
 
+// always makes a fetch request
 export async function requestFromJobNimbus(
     endpoint: string,
     // headers: Record<string, string>,
@@ -165,15 +27,7 @@ export async function requestFromJobNimbus(
     const queryString = params && Object.keys(params).length > 0
         ? '?' + new URLSearchParams(params).toString()
         : '';
-    const url = `https://app.jobnimbus.com/api1/${endpoint}${queryString}`;
-
-    // TODO what if the data is old?
-    // check if the data is already cached
-    const cache = await caches.open("job_nimbus_data");
-    const cached = await cache.match(url);
-    if (cached) {
-        return cached;
-    }
+    const url = `http://localhost:8080/api1/${endpoint}${queryString}`;
 
     // get the api key
     const token = localStorage.getItem('job_nimbus_api_key');
@@ -182,6 +36,7 @@ export async function requestFromJobNimbus(
     }
 
     // fetch the data
+    console.log(`fetching ${url} with params ${JSON.stringify(params)}`);
     const response = await fetch(
         url,
         {
@@ -191,12 +46,29 @@ export async function requestFromJobNimbus(
             },
         }
     );
-    await cache.put(url, response.clone());
+    console.log(`response for ${url} complete: ${response.status} ${response.statusText}`);
     return response;
 }
 
-export async function requestJobStatuses(): Promise<JobStatusRegistry> {
-    const settings = await requestFromJobNimbus("account/settings", {}).then(response => response.json());
+// gets the contents of https://app.jobnimbus.com/api1/account/settings,
+// possibly cached
+async function getSettings(): Promise<unknown> {
+    const dbKey = "settings";
+
+    // try to load from the cache
+    const cached = await jnCacheLoad(dbKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    // fetch the data anew
+    const response = await requestFromJobNimbus("account/settings", {}).then(r => r.json());
+    await jnCacheStore(dbKey, response);
+    return response;
+}
+
+export async function getJobStatuses(): Promise<JobStatusRegistry> {
+    const settings = await getSettings();
     assertObject(settings);
 
     const allWorkflows = settings["workflows"];
@@ -217,8 +89,8 @@ export async function requestJobStatuses(): Promise<JobStatusRegistry> {
     return statuses;
 }
 
-export async function requestLeadSources(): Promise<JobLeadSourceRegistry> {
-    const settings = await requestFromJobNimbus("account/settings", {});
+export async function getLeadSources(): Promise<JobLeadSourceRegistry> {
+    const settings = await getSettings();
     assertObject(settings);
     assertArray(settings["sources"]);
 
@@ -233,11 +105,23 @@ export async function requestLeadSources(): Promise<JobLeadSourceRegistry> {
     return sources;
 }
 
-export async function requestAllJobActivities(): Promise<JnActivity[]> {
-    let earliestTs: Date | null = null;
-    let activities: any[] = [];
+export async function getAllJobActivitiesUnparsed(): Promise<unknown[]> {
+    const dbKey = "activities";
+
+    // check the cache
+    const cached = await jnCacheLoad(dbKey);
+    if (cached !== undefined) {
+        assertArray(cached);
+        return cached;
+    }
+
+    // fetch the data anew
+    let earliestTs: number | null = null;
+    let activities: unknown[] = [];
     while (true) {
         const response: unknown = await requestFromJobNimbus("activities", {
+            "sort_field": "date_created",
+            "sort_order": "desc",
             "filter": JSON.stringify({
                 "must": [
                     {
@@ -250,47 +134,41 @@ export async function requestAllJobActivities(): Promise<JnActivity[]> {
                             "primary.type": "job"
                         }
                     },
-                    {
+                    ...(earliestTs ? [{
                         "range": {
                             "date_created": {
                                 "lte": earliestTs,
                             }
                         }
-                    },
+                    }] : []),
                 ]
-            })
-        });
+            }),
+        }).then(r => r.json());
         assertObject(response);
 
         const newActivities = response["activity"];
         assertArray(newActivities);
 
-        if (newActivities.length === 0) {
+        if (newActivities.length < 1000) { // max number of activities per page
+            // we've seen the last page
             break;
         } else {
-            earliestTs = new Date(activities.at(-1)['date_created'] * 1000);
+            const lastActivity = newActivities.at(-1);
+            assertObject(lastActivity);
+            earliestTs = Number(lastActivity['date_created']);
         }
 
         activities.push(...newActivities);
     }
+    await jnCacheStore(dbKey, activities);
+    return activities;
+}
 
-    const statuses = await requestJobStatuses();
+export async function getAllJobActivities(): Promise<JnActivity[]> {
+    const activities = await getAllJobActivitiesUnparsed();
+    const statuses = await getJobStatuses();
     return activities.map(activity => parseJnActivity(activity, statuses));
 }
-
-
-interface JnActivityBase {
-    primaryJnid: string;
-    timestamp: Date;
-    recordTypeName: string;
-    text: string;
-}
-export type JnActivity = JnActivityBase & (
-    | { type: "generic" }
-    | { type: "job_created" }
-    | { type: "status_changed"; oldStatus: JobStatus; newStatus: JobStatus }
-    | { type: "job_modified"; updates: { [key: string]: [string, string] } }
-)
 
 function parseActivityBase(json: { [key: string]: unknown }): JnActivityBase {
     assertObject(json);
@@ -401,4 +279,101 @@ function parseJnActivity(
         );
         return { ...parseActivityBase(json), type: "generic" };
     }
+}
+
+const RAW_JOB_BASE_DATA_KEYS = {
+    JNID: "jnid",
+    STATUS: "status",
+    DATE_STATUS_CHANGE: "date_status_change",
+    SALES_REP_NAME: "sales_rep_name",
+    INSURANCE_CHECKBOX: "Insurance Job?",
+    INSURANCE_COMPANY_NAME: "Insurance Company",
+    INSURANCE_CLAIM_NUMBER: "Claim #",
+    JOB_NUMBER: "number",
+    JOB_NAME: "name",
+    AMT_RECEIVABLE: "approved_invoice_due",
+    APPOINTMENT_DATE: "Sales Appt Date",
+    CONTINGENCY_DATE: "Signed Contingency Date",
+    CONTRACT_DATE: "Signed Contract Date",
+    INSTALL_DATE: "Install Date",
+    LOSS_DATE: "Job Lost Date (Lost Status)",
+}
+
+export function parseJobBaseData(
+    raw: Record<string, unknown>,
+    statuses: JobStatusRegistry,
+): JobBaseData {
+    const getNonEmptyString = (key: string): string | null => {
+        const value = raw[key];
+        return typeof value === "string" && value.trim() ? value : null;
+    };
+    const getTimestampNonZero = (key: string): Date | null => {
+        const value = raw[key];
+        if (typeof value === "number" && value !== 0) {
+            const date = new Date(value * 1000);
+            return Number.isNaN(date.getTime()) ? null : date;
+        }
+        return null;
+    };
+    const getNumber = (key: string): number | null => {
+        const value = raw[key];
+        if (typeof value === "number") {
+            return value;
+        }
+        return null;
+    };
+
+    const jnid = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JNID);
+    if (jnid === null) {
+        throw new Error("Missing or invalid jnid field");
+    }
+
+    // get the job status
+    const statusIdValue = getNumber(RAW_JOB_BASE_DATA_KEYS.STATUS);
+    const status = statusIdValue ? statuses[statusIdValue] : undefined;
+    if (!status) {
+        throw new Error(`Unknown status id: ${statusIdValue}`);
+    }
+
+    // get the last status update
+    const statusModDate = getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.DATE_STATUS_CHANGE);
+
+    // optional fields
+    const salesRep = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.SALES_REP_NAME);
+    const insuranceCheckbox = Boolean(raw[RAW_JOB_BASE_DATA_KEYS.INSURANCE_CHECKBOX]);
+    const insuranceCompanyName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_COMPANY_NAME);
+    const insuranceClaimNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_CLAIM_NUMBER);
+    const jobNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NUMBER);
+    const jobName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NAME);
+
+    // get the amount receivable
+    let amtReceivable = 0;
+    const amountValue = raw[RAW_JOB_BASE_DATA_KEYS.AMT_RECEIVABLE];
+    if (typeof amountValue === "number") {
+        amtReceivable = Math.trunc(amountValue * 100);
+    }
+
+    // get milestone dates, keyed by milestone string value
+    const milestoneDates: MilestoneDates = {
+        [JobMilestone.LEAD_ACQUIRED]: null,
+        [JobMilestone.APPOINTMENT_MADE]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.APPOINTMENT_DATE),
+        [JobMilestone.CONTINGENCY_SIGNED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.CONTINGENCY_DATE),
+        [JobMilestone.CONTRACT_SIGNED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.CONTRACT_DATE),
+        [JobMilestone.INSTALLED]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.INSTALL_DATE),
+        [JobMilestone.LOST]: getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.LOSS_DATE),
+    };
+
+    return {
+        jnid,
+        milestoneDates,
+        status,
+        statusModDate,
+        salesRep,
+        insuranceCheckbox,
+        insuranceClaimNumber,
+        insuranceCompanyName,
+        jobNumber,
+        jobName,
+        amtReceivable,
+    };
 }

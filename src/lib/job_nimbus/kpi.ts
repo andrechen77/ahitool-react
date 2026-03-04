@@ -1,5 +1,5 @@
 import Graph from "graphology";
-import type { JobStatusRegistry, JobStatus, JnActivity } from "./api";
+import type { JobStatusRegistry, JobStatus, JnActivity } from "./types";
 
 function parseGraphSettings(settingsStr: string, statuses: JobStatusRegistry): Record<string, Set<JobStatus>> {
     // create a map of the each status name to the status object
@@ -12,6 +12,9 @@ function parseGraphSettings(settingsStr: string, statuses: JobStatusRegistry): R
     const invalidStatusNames: Set<string> = new Set();
     const statusGroups: Record<string, Set<JobStatus>> = {};
     for (const line of settingsStr.trim().split('\n')) {
+        if (line.trim() === '') {
+            continue;
+        }
         const split = line.split(':', 2).map(s => s.trim());
         const [nickname, namesStr] = split.length === 2 ? split : [split[0], split[0]];
         const statusesInGroup: Set<JobStatus> = new Set();
