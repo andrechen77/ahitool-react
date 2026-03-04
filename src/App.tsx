@@ -1,40 +1,49 @@
-import './App.css'
-import { NavLink, Route, Routes } from 'react-router-dom'
-import HomePage from './pages/HomePage'
-import SalesKpisPage from './pages/SalesKpisPage'
+import { NavLink, Route, Routes } from 'react-router-dom';
+import { ApiKeyModalProvider } from './contexts/ApiKeyModalContext';
+import { ApiKeyModal } from './components/ApiKeyModal';
+import HomePage from './pages/HomePage';
+import SalesKpisPage from './pages/SalesKpisPage';
 
 function App() {
-
   return (
-    <div className="app">
-      <header className="navbar">
-        <NavLink
-          to="/"
-          end
-          className="navbar-brand"
-        >
-          ahitool
-        </NavLink>
-        <nav className="navbar-links">
-          <NavLink
-            to="/sales-kpis"
-            className={({ isActive }: { isActive: boolean }) =>
-              `nav-link ${isActive ? 'active' : ''}`
-            }
-          >
-            Sales KPIs
-          </NavLink>
-        </nav>
-      </header>
+    <ApiKeyModalProvider>
+      <div className="min-h-screen flex flex-col bg-slate-50">
+        <ApiKeyModal />
 
-      <main className="main-content">
-        <Routes>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/sales-kpis" element={<SalesKpisPage />} />
-        </Routes>
-      </main>
-    </div>
-  )
+        <header className="flex items-center justify-between px-6 py-3 bg-slate-900 text-slate-50 shadow">
+          <NavLink
+            to="/"
+            end
+            className="text-base font-semibold tracking-[0.2em] uppercase"
+          >
+            ahitool
+          </NavLink>
+          <nav className="flex gap-3">
+            <NavLink
+              to="/sales-kpis"
+              className={({ isActive }: { isActive: boolean }) =>
+                [
+                  'inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors',
+                  isActive
+                    ? 'bg-slate-50 text-slate-900'
+                    : 'text-slate-200 hover:bg-slate-50/10 hover:text-white',
+                ].join(' ')
+              }
+            >
+              Sales KPIs
+            </NavLink>
+          </nav>
+        </header>
+
+        <main className="flex-1 max-w-3xl w-full mx-auto my-8 mb-12 px-6">
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/sales-kpis" element={<SalesKpisPage />} />
+          </Routes>
+        </main>
+      </div>
+    </ApiKeyModalProvider>
+  );
 }
 
-export default App
+export default App;
