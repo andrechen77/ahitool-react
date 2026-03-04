@@ -1,7 +1,7 @@
 // functions for interacting with the JobNimbus API and parsing the responses
 
 import { assertArray, assertObject } from "../types";
-import { jnCacheLoad, jnCacheStore } from "./indexed_db";
+import { cachedOrCalculate } from "./indexed_db";
 import { JobMilestone } from "./types";
 import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./types";
 
@@ -53,18 +53,9 @@ export async function requestFromJobNimbus(
 // gets the contents of https://app.jobnimbus.com/api1/account/settings,
 // possibly cached
 async function getSettings(): Promise<unknown> {
-    const dbKey = "settings";
-
-    // try to load from the cache
-    const cached = await jnCacheLoad(dbKey);
-    if (cached !== undefined) {
-        return cached;
-    }
-
-    // fetch the data anew
-    const response = await requestFromJobNimbus("account/settings", {}).then(r => r.json());
-    await jnCacheStore(dbKey, response);
-    return response;
+    return await cachedOrCalculate("settings", async () => {
+        await requestFromJobNimbus("account/settings", {}).then(r => r.json())
+    });
 }
 
 export async function getJobStatuses(): Promise<JobStatusRegistry> {
@@ -105,69 +96,67 @@ export async function getLeadSources(): Promise<JobLeadSourceRegistry> {
     return sources;
 }
 
-export async function getAllJobActivitiesUnparsed(): Promise<unknown[]> {
-    const dbKey = "activities";
+// repeatedly make requests from JobNimbus until all items are fetched
+async function getAllFromJobNimbus(endpoint: string, params: Record<string, string>, resultKey: string): Promise<unknown[]> {
+    const maxPerPage = 1000;
 
-    // check the cache
-    const cached = await jnCacheLoad(dbKey);
-    if (cached !== undefined) {
-        assertArray(cached);
-        return cached;
-    }
-
-    // fetch the data anew
-    let earliestTs: number | null = null;
-    let activities: unknown[] = [];
-    while (true) {
-        const response: unknown = await requestFromJobNimbus("activities", {
-            "sort_field": "date_created",
-            "sort_order": "desc",
-            "filter": JSON.stringify({
-                "must": [
-                    {
-                        "term": {
-                            "is_status_change": true,
-                        },
-                    },
-                    {
-                        "term": {
-                            "primary.type": "job"
-                        }
-                    },
-                    ...(earliestTs ? [{
-                        "range": {
-                            "date_created": {
-                                "lte": earliestTs,
-                            }
-                        }
-                    }] : []),
-                ]
-            }),
-        }).then(r => r.json());
+    let results: unknown[] = [];
+    let newResults: unknown[];
+    do {
+        params["size"] = String(maxPerPage);
+        params["from"] = String(results.length);
+        const response: unknown = await requestFromJobNimbus(endpoint, params).then(r => r.json());
         assertObject(response);
 
-        const newActivities = response["activity"];
-        assertArray(newActivities);
+        newResults = response[resultKey] as unknown[];
+        assertArray(newResults);
 
-        if (newActivities.length < 1000) { // max number of activities per page
-            // we've seen the last page
-            break;
-        } else {
-            const lastActivity = newActivities.at(-1);
-            assertObject(lastActivity);
-            earliestTs = Number(lastActivity['date_created']);
-        }
+        results.push(...newResults);
+    } while (newResults.length >= maxPerPage);
+    return results;
+}
 
-        activities.push(...newActivities);
-    }
-    await jnCacheStore(dbKey, activities);
-    return activities;
+export async function getAllJobActivitiesUnparsed(): Promise<unknown[]> {
+    return await cachedOrCalculate("activities", async () => {
+        return await getAllFromJobNimbus(
+            "activities",
+            {
+                "filter": JSON.stringify({
+                    "must": [
+                        {
+                            "term": {
+                                "is_status_change": true,
+                            },
+                        },
+                        {
+                            "term": {
+                                "primary.type": "job"
+                            }
+                        },
+                    ]
+                })
+            },
+            "activity",
+        );
+    });
 }
 
 export async function getAllJobActivities(): Promise<JnActivity[]> {
     const activities = await getAllJobActivitiesUnparsed();
     const statuses = await getJobStatuses();
     return activities.map(activity => parseJnActivity(activity, statuses));
+}
+
+export async function getAllJobBaseData(): Promise<JobBaseData[]> {
+    const data = await cachedOrCalculate("base_data", async () => {
+        return await getAllFromJobNimbus(
+            "jobs",
+            {},
+            "results",
+        );
+    });
+    const statuses = await getJobStatuses();
+    return data.map(job => parseJobBaseData(job, statuses));
 }
 
 function parseActivityBase(json: { [key: string]: unknown }): JnActivityBase {
@@ -300,9 +289,11 @@ const RAW_JOB_BASE_DATA_KEYS = {
 }
 
 export function parseJobBaseData(
-    raw: Record<string, unknown>,
+    raw: unknown,
     statuses: JobStatusRegistry,
 ): JobBaseData {
+    assertObject(raw);
+
     const getNonEmptyString = (key: string): string | null => {
         const value = raw[key];
         return typeof value === "string" && value.trim() ? value : null;
