@@ -10,7 +10,7 @@ interface JobNimbusDataContextType {
 	statuses: JobStatusRegistry;
 	leadSources: JobLeadSourceRegistry;
 	isLoading: boolean;
-	refresh: () => Promise<void>;
+	refresh: (clearCache: boolean) => Promise<void>;
 }
 
 const JobNimbusDataContext = createContext<JobNimbusDataContextType | undefined>(undefined);
@@ -22,11 +22,17 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 	const [leadSources, setLeadSources] = useState<JobLeadSourceRegistry>({});
 	const [isLoading, setIsLoading] = useState(false);
 
-	const refresh = async () => {
+	const refresh = async (clearCache: boolean) => {
 		setIsLoading(true);
 
-		// clear the cache
-		await jnCacheClear();
+		if (clearCache) {
+			await jnCacheClear();
+		}
+
+		setStatuses({});
+		setLeadSources({});
+		setJobsByJnid({});
+		setActivitiesByJobJnid({});
 
 		const statuses = await getJobStatuses();
 		setStatuses(statuses);
