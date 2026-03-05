@@ -20,12 +20,25 @@ import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import JnClient from '../components/JnClient';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
 import type { JobStatus } from '../lib/job_nimbus/types';
+import { useSavedState } from '../lib/useSavedState';
 
 function SalesKpisPage() {
 	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = useJobNimbusData();
 
-	const [statusGroups, setStatusGroups] = useState<StatusGroup[]>([]);
-	const [nextGroupId, setNextGroupId] = useState(1);
+	const [statusGroups, setStatusGroups] = useSavedState<StatusGroup[]>(
+		"sales-kpis:status_groups",
+		JSON.stringify,
+		str => {
+			const statusGroups = JSON.parse(str) as StatusGroup[];
+			return statusGroups.map((group, index) => ({
+				id: `group-${index}`,
+				name: group.name,
+				statusIds: group.statusIds,
+			}));
+		},
+		() => []
+	);
+	const [nextGroupId, setNextGroupId] = useState(statusGroups.length);
 	const [sankeyData, setSankeyData] = useState<KpiSankeyData>({
 		nodeNames: [],
 		sourceIds: [],
@@ -257,9 +270,7 @@ function StatusGroupItem({
 		transform: CSS.Transform.toString(transform),
 		transition,
 	};
-	const selectedOptions = statusOptions.filter((option) =>
-		group.statusIds.includes(option.value),
-	);
+	const selectedOptions = group.statusIds.map(statusId => statusOptions.find(option => option.value === statusId) ?? { value: statusId, label: `Unknown status ${statusId}` });
 	return (
 		<div
 			ref={setNodeRef}
@@ -269,7 +280,7 @@ function StatusGroupItem({
 			{...listeners}
 		>
 			<div className="flex gap-3">
-				<div className="mb-2 w-1/4">
+				<div className="mb-2 w-1/5">
 					<label className="mb-1 block text-xs font-medium text-slate-600">
 						Group name
 					</label>
@@ -278,7 +289,7 @@ function StatusGroupItem({
 						className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
 						value={group.name}
 						onChange={(e) => onNameChange(group.id, e.target.value)}
-						placeholder="e.g. Appointment Made"
+						placeholder="e.g. Installed"
 					/>
 				</div>
 				<div className="mb-2 flex-1">
