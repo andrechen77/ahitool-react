@@ -87,7 +87,7 @@ function JnClient() {
 					<p>
 						<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
 					</p>
-					<button onClick={openModal} className="bg-gray-500 text-white px-4 py-2 rounded-md my-2 cursor-pointer">
+					<button onClick={openModal} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
 						Update API Key
 					</button>
 				</div>
