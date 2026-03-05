@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import Plot from 'react-plotly.js';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
-import { getAllJobActivities, getJobStatuses } from '../lib/job_nimbus/api';
-import type { JnActivity } from '../lib/job_nimbus/types';
 import JnClient from '../components/JnClient';
+import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
 
-const DEFAULT_GRAPH_SETTINGS = 'a: b, c\nd: e, f';
+const PLACEHOLDER_GRAPH_SETTINGS = 'my status group: Hot Lead, Cold Lead\nmy other status group: Appointment Made, Contingency Signed';
 
 function SalesKpisPage() {
+	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = useJobNimbusData();
+
 	const [graphSettings, setGraphSettings] = useState('');
 	const [sankeyData, setSankeyData] = useState<KpiSankeyData>({
 		nodeNames: [],
@@ -22,14 +23,9 @@ function SalesKpisPage() {
 	});
 
 	const calculateSankeyData = async () => {
-		const statuses = await getJobStatuses();
-		const activities = await getAllJobActivities();
-		const activitiesByJobJnid = activities.reduce((acc, activity) => {
-			acc[activity.primaryJnid] = [...(acc[activity.primaryJnid] ?? []), activity];
-			return acc;
-		}, {} as Record<string, JnActivity[]>);
-		const sankeyData = await generateKpiGraph(graphSettings, statuses, activitiesByJobJnid);
-		setSankeyData(sankeyData);
+		const { data, invisibleJobs } = await generateKpiGraph(graphSettings, statuses, activitiesByJobJnid, jobsByJnid);
+		console.log(`${invisibleJobs.length} jobs were not included in the graph because they had no edges`, invisibleJobs);
+		setSankeyData(data);
 	};
 
 	return (
@@ -59,7 +55,7 @@ function SalesKpisPage() {
 						borderRadius: 4,
 						border: '1px solid #ccc',
 					}}
-					placeholder={DEFAULT_GRAPH_SETTINGS}
+					placeholder={PLACEHOLDER_GRAPH_SETTINGS}
 				/>
 			</div>
 

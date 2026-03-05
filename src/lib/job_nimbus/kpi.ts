@@ -1,5 +1,5 @@
 import Graph from "graphology";
-import type { JobStatusRegistry, JobStatus, JnActivity } from "./types";
+import type { JobStatusRegistry, JobStatus, JnActivity, JobBaseData } from "./types";
 
 function parseGraphSettings(settingsStr: string, statuses: JobStatusRegistry): Record<string, Set<JobStatus>> {
     // create a map of the each status name to the status object
@@ -41,7 +41,7 @@ type StatusHistoryEntry = {
 };
 
 // Construct job status history from activities
-function constructJobStatusHistory(activities: JnActivity[]): StatusHistoryEntry[] {
+function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobStatus): StatusHistoryEntry[] {
     const sortedActivities = [...activities].sort(
         (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
@@ -54,9 +54,9 @@ function constructJobStatusHistory(activities: JnActivity[]): StatusHistoryEntry
             // check the old status to ensure consistency
             if (history.length > 0) {
                 const lastEntry = history.at(-1)!;
-                if (lastEntry?.status === null) {
+                if (lastEntry.status === null) {
                     lastEntry.status = activity.oldStatus;
-                } else if (lastEntry.status !== activity.oldStatus) {
+                } else if (lastEntry.status.id !== activity.oldStatus.id) {
                     console.warn(
                         `Job status history inconsistency detected: at ${activity.timestamp}, ` +
                         `the old status was ${activity.oldStatus.name}, but the previous entry ` +
@@ -65,21 +65,23 @@ function constructJobStatusHistory(activities: JnActivity[]): StatusHistoryEntry
                 }
             }
             history.push({ timestamp: activity.timestamp, status: activity.newStatus });
+        } else if (activity.type === "job_modified") {
+            console.log("");
         }
     }
 
     // if the latest status cannot be inferred from the status changes, add a final status
-    // if (history.length > 0) {
-    //     const lastEntry = history.at(-1)!;
-    //     if (lastEntry.status === null) {
-    //         lastEntry.status = currentStatus;
-    //     } else if (lastEntry.status !== currentStatus) {
-    //         console.warn(
-    //             `Job status history inconsistency detected: at ${lastEntry.timestamp}, ` +
-    //             `the status was ${lastEntry.status.name}, but the current status is ${currentStatus.name}`,
-    //         );
-    //     }
-    // }
+    if (history.length > 0) {
+        const lastEntry = history.at(-1)!;
+        if (lastEntry.status === null) {
+            lastEntry.status = currentStatus;
+        } else if (lastEntry.status.id !== currentStatus.id) {
+            console.warn(
+                `Job status history inconsistency detected: at ${lastEntry.timestamp}, ` +
+                `the status was ${lastEntry.status.name}, but the final status is ${currentStatus.name}`,
+            );
+        }
+    }
 
     return history;
 }
@@ -95,21 +97,22 @@ export interface KpiSankeyData {
 export async function generateKpiGraph(
     settingsStr: string,
     statuses: JobStatusRegistry,
-    activitiesByJobJnid: { [jobJnid: string]: JnActivity[] }
-): Promise<KpiSankeyData> {
+    activitiesByJobJnid: { [jobJnid: string]: JnActivity[] },
+    jobsByJnid: { [jobJnid: string]: JobBaseData },
+): Promise<{ data: KpiSankeyData, invisibleJobs: string[] }> {
     const statusGroups = parseGraphSettings(settingsStr, statuses);
 
     let jobGraph = new JobGraphEmbedding(statusGroups, true);
     let invisibleJobs: string[] = [];
     for (const [jobJnid, activities] of Object.entries(activitiesByJobJnid)) {
-        const statusHistory = constructJobStatusHistory(activities);
+        const statusHistory = constructJobStatusHistory(activities, jobsByJnid[jobJnid].status);
         const numEdges = jobGraph.addJob(jobJnid, statusHistory);
         if (numEdges === 0) {
             invisibleJobs.push(jobJnid);
         }
     }
 
-    return jobGraph.calculateSankeyData();
+    return { data: jobGraph.calculateSankeyData(), invisibleJobs };
 }
 
 class JobGraphEmbedding {
@@ -179,6 +182,10 @@ class JobGraphEmbedding {
             }
             return nodeHistory;
         })();
+
+        if (nodeHistory.length === 0) {
+            return 0;
+        }
 
         // now iterate through the list of nodes and add them to the graph
         let lastTs = nodeHistory[0].timestamp;
