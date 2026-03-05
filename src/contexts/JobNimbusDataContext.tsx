@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { getAllJobActivities, getAllJobBaseData, getJobStatuses, getLeadSources } from '../lib/job_nimbus/api';
-import type { JnActivity, JobBaseData, JobStatusRegistry, JobLeadSourceRegistry } from '../lib/job_nimbus/types';
+import type { JnActivity, JobBaseData, JobStatusRegistry, JobLeadSourceRegistry } from '../lib/job_nimbus/domain';
 import { jnCacheClear } from '../lib/job_nimbus/indexed_db';
 
 interface JobNimbusDataContextType {

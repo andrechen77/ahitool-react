@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import { FaSyncAlt } from 'react-icons/fa';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
 import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
-import { Button } from './Button';
-import { Card } from './Card';
-import { cn } from '../lib/cn';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { cn } from '../util/cn';
 
 type Tab = 'overview' | 'statuses' | 'leadSources';
 

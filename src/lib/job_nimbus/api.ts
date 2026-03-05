@@ -2,8 +2,8 @@
 
 import { assertArray, assertObject } from "../types";
 import { cachedOrCalculate } from "./indexed_db";
-import { JobMilestone } from "./types";
-import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./types";
+import { JobMilestone } from "./domain";
+import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
 export class ApiKeyError extends Error {
     /// The API key that was used when the error occurred, or null if one wa

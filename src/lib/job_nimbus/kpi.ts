@@ -1,5 +1,5 @@
 import Graph from "graphology";
-import type { JobStatusRegistry, JobStatus, JnActivity, JobBaseData } from "./types";
+import type { JobStatusRegistry, JobStatus, JnActivity, JobBaseData } from "./domain";
 
 function parseGraphSettings(settingsStr: string, statuses: JobStatusRegistry): Record<string, Set<JobStatus>> {
     // create a map of the each status name to the status object

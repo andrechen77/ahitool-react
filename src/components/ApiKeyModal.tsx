@@ -2,8 +2,8 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
 import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
-import { Input } from './Input';
-import { Button } from './Button';
+import { Input } from './ui/Input';
+import { Button } from './ui/Button';
 
 type FormOnSubmit = React.ComponentPropsWithoutRef<'form'>['onSubmit'];
 

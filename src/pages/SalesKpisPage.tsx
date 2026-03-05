@@ -19,11 +19,11 @@ import { CSS } from '@dnd-kit/utilities';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import JnClient from '../components/JnClient';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
-import type { JobStatus } from '../lib/job_nimbus/types';
-import { useSavedState } from '../lib/useSavedState';
-import { Button } from '../components/Button';
-import { Card } from '../components/Card';
-import { Input } from '../components/Input';
+import type { JobStatus } from '../lib/job_nimbus/domain';
+import { useSavedState } from '../hooks/useSavedState';
+import { Button } from '../components/ui/Button';
+import { Card } from '../components/ui/Card';
+import { Input } from '../components/ui/Input';
 
 function SalesKpisPage() {
 	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = useJobNimbusData();

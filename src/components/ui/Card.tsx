@@ -1,5 +1,5 @@
 import type React from 'react';
-import { cn } from '../lib/cn';
+import { cn } from '../../util/cn';
 
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> { }
 

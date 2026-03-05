@@ -1,5 +1,5 @@
 import React from 'react';
-import { cn } from '../lib/cn';
+import { cn } from '../../util/cn';
 
 type InputSize = 'sm' | 'md' | 'lg';
 
