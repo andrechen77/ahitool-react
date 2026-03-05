@@ -1,39 +1,5 @@
 import Graph from "graphology";
-import type { JobStatusRegistry, JobStatus, JnActivity, JobBaseData } from "./domain";
-
-function parseGraphSettings(settingsStr: string, statuses: JobStatusRegistry): Record<string, Set<JobStatus>> {
-    // create a map of the each status name to the status object
-    let statusByName: Record<string, JobStatus> = {};
-    for (const status of Object.values(statuses)) {
-        statusByName[status.name] = status;
-    }
-
-    // create the status groups
-    const invalidStatusNames: Set<string> = new Set();
-    const statusGroups: Record<string, Set<JobStatus>> = {};
-    for (const line of settingsStr.trim().split('\n')) {
-        if (line.trim() === '') {
-            continue;
-        }
-        const split = line.split(':', 2).map(s => s.trim());
-        const [nickname, namesStr] = split.length === 2 ? split : [split[0], split[0]];
-        const statusesInGroup: Set<JobStatus> = new Set();
-        for (const name of namesStr.split(',').map(s => s.trim())) {
-            if (statusByName.hasOwnProperty(name)) {
-                statusesInGroup.add(statusByName[name]);
-            } else {
-                invalidStatusNames.add(name);
-            }
-        }
-        statusGroups[nickname] = statusesInGroup;
-    }
-
-    if (invalidStatusNames.size > 0) {
-        console.warn("Invalid status names: " + Array.from(invalidStatusNames).join(', '));
-    }
-
-    return statusGroups;
-}
+import type { JobStatus, JnActivity, JobBaseData } from "./domain";
 
 type StatusHistoryEntry = {
     timestamp: Date,
