@@ -21,6 +21,9 @@ import JnClient from '../components/JnClient';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
 import type { JobStatus } from '../lib/job_nimbus/types';
 import { useSavedState } from '../lib/useSavedState';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
+import { Input } from '../components/Input';
 
 function SalesKpisPage() {
 	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = useJobNimbusData();
@@ -54,8 +57,10 @@ function SalesKpisPage() {
 	}, [statuses]);
 
 	const [sankeyLayout] = useState({
-		title: 'Sales Flow (placeholder Sankey)',
-		font: { size: 12 },
+		title: {
+			text: 'Sales Flow (placeholder Sankey)',
+			font: { size: 12 },
+		},
 	});
 
 	const availableOptionsByGroupId = useMemo<Record<string, StatusOption[]>>(
@@ -149,25 +154,21 @@ function SalesKpisPage() {
 
 			<JnClient />
 
-			<div className="mt-8 max-w-2xl rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+			<Card className="mt-8">
 				<div className="mb-2 flex items-center justify-between">
 					<h2 className="text-lg font-semibold">Status groups</h2>
 					<div className="flex items-center gap-2">
-						<button
-							type="button"
-							onClick={handleAddGroup}
-							className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors cursor-pointer hover:bg-slate-800 active:bg-slate-700"
-						>
+						<Button type="button" onClick={handleAddGroup}>
 							Add group
-						</button>
-						<button
+						</Button>
+						<Button
 							type="button"
+							variant="secondary"
 							onClick={handleDeleteLastGroup}
 							disabled={statusGroups.length === 0}
-							className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
 						>
 							Delete last group
-						</button>
+						</Button>
 					</div>
 				</div>
 				<p className="mb-3 text-sm text-slate-600">
@@ -204,9 +205,11 @@ function SalesKpisPage() {
 						</DndContext>
 					</div>
 				)}
-			</div>
+			</Card>
 
-			<button onClick={calculateSankeyData} className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-colors cursor-pointer hover:bg-slate-800 active:bg-slate-700">Generate Sankey Diagram</button>
+			<Button onClick={calculateSankeyData} size="md" className="mt-4">
+				Generate Sankey Diagram
+			</Button>
 
 			<div style={{ marginTop: '2rem' }}>
 				<Plot
@@ -275,7 +278,7 @@ function StatusGroupItem({
 		<div
 			ref={setNodeRef}
 			style={style}
-			className="cursor-grab mb-3 rounded-md border border-slate-200 bg-white p-3 shadow-sm"
+			className="cursor-grab mb-3 rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
 			{...attributes}
 			{...listeners}
 		>
@@ -284,9 +287,9 @@ function StatusGroupItem({
 					<label className="mb-1 block text-xs font-medium text-slate-600">
 						Group name
 					</label>
-					<input
+					<Input
 						type="text"
-						className="w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm focus:border-slate-900 focus:outline-none focus:ring-1 focus:ring-slate-900"
+						size="sm"
 						value={group.name}
 						onChange={(e) => onNameChange(group.id, e.target.value)}
 						placeholder="e.g. Installed"

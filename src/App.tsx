@@ -24,12 +24,7 @@ function App() {
               <NavLink
                 to="/sales-kpis"
                 className={({ isActive }: { isActive: boolean }) =>
-                  [
-                    'inline-flex items-center rounded-full px-3 py-1 text-sm transition-colors',
-                    isActive
-                      ? 'bg-slate-50 text-slate-900'
-                      : 'text-slate-200 hover:bg-slate-50/10 hover:text-white',
-                  ].join(' ')
+                  isActive ? 'nav-link nav-link-active' : 'nav-link'
                 }
               >
                 Sales KPIs

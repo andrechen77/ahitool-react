@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { FaSyncAlt } from 'react-icons/fa';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
 import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
+import { Button } from './Button';
+import { Card } from './Card';
+import { cn } from '../lib/cn';
 
 type Tab = 'overview' | 'statuses' | 'leadSources';
 
@@ -26,45 +29,46 @@ function JnClient() {
 	const leadSourcesArray = Object.values(leadSources);
 
 	return (
-		<div className="border border-slate-300 rounded-md p-4 my-2">
+		<Card className="my-2">
 			<div className="flex items-center gap-2 mb-4">
 				<h2 className="text-lg font-bold">JobNimbus Data</h2>
-				<button
+				<Button
 					onClick={() => refresh(true)}
-					className="p-1 hover:bg-slate-200 rounded transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+					variant="ghost"
+					icon
 					disabled={isLoading}
 					title="Refresh data"
 				>
 					<FaSyncAlt className={isLoading ? 'animate-spin' : ''} />
-				</button>
+				</Button>
 			</div>
 
 			<div className="border-b border-slate-300 mb-4">
-				<div className="flex gap-2">
+				<div className="tabs">
 					<button
 						onClick={() => setActiveTab('overview')}
-						className={`px-4 py-2 font-medium transition-colors ${activeTab === 'overview'
-							? 'border-b-2 border-slate-900 text-slate-900'
-							: 'text-slate-600 hover:text-slate-900'
-							}`}
+						className={cn(
+							'tab',
+							activeTab === 'overview' ? 'tab-active' : 'tab-inactive',
+						)}
 					>
 						Overview
 					</button>
 					<button
 						onClick={() => setActiveTab('statuses')}
-						className={`px-4 py-2 font-medium transition-colors ${activeTab === 'statuses'
-							? 'border-b-2 border-slate-900 text-slate-900'
-							: 'text-slate-600 hover:text-slate-900'
-							}`}
+						className={cn(
+							'tab',
+							activeTab === 'statuses' ? 'tab-active' : 'tab-inactive',
+						)}
 					>
 						Statuses
 					</button>
 					<button
 						onClick={() => setActiveTab('leadSources')}
-						className={`px-4 py-2 font-medium transition-colors ${activeTab === 'leadSources'
-							? 'border-b-2 border-slate-900 text-slate-900'
-							: 'text-slate-600 hover:text-slate-900'
-							}`}
+						className={cn(
+							'tab',
+							activeTab === 'leadSources' ? 'tab-active' : 'tab-inactive',
+						)}
 					>
 						Lead Sources
 					</button>
@@ -87,26 +91,26 @@ function JnClient() {
 					<p>
 						<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
 					</p>
-					<button onClick={openModal} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors cursor-pointer hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50">
+					<Button type="button" variant="secondary" onClick={openModal}>
 						Update API Key
-					</button>
+					</Button>
 				</div>
 			)}
 
 			{activeTab === 'statuses' && (
 				<div className="max-h-96 overflow-y-auto border border-slate-200 rounded-md">
-					<table className="w-full border-collapse">
-						<thead className="sticky top-0 bg-white">
-							<tr className="border-b border-slate-300">
-								<th className="text-left py-1 px-2 font-semibold">Internal ID</th>
-								<th className="text-left py-1 px-2 font-semibold">Name</th>
+					<table className="table">
+						<thead className="table-header-sticky">
+							<tr className="table-header-row">
+								<th className="table-header-cell">Internal ID</th>
+								<th className="table-header-cell">Name</th>
 							</tr>
 						</thead>
 						<tbody>
 							{statusesArray.map((status) => (
-								<tr key={status.id} className="border-b border-slate-200">
-									<td className="py-1 px-2">{status.id}</td>
-									<td className="py-1 px-2">{status.name}</td>
+								<tr key={status.id} className="table-row">
+									<td className="table-cell">{status.id}</td>
+									<td className="table-cell">{status.name}</td>
 								</tr>
 							))}
 						</tbody>
@@ -116,25 +120,25 @@ function JnClient() {
 
 			{activeTab === 'leadSources' && (
 				<div className="max-h-96 overflow-y-auto border border-slate-200 rounded-md">
-					<table className="w-full border-collapse">
-						<thead className="sticky top-0 bg-white">
-							<tr className="border-b border-slate-300">
-								<th className="text-left py-1 px-2 font-semibold">Internal ID</th>
-								<th className="text-left py-1 px-2 font-semibold">Name</th>
+					<table className="table">
+						<thead className="table-header-sticky">
+							<tr className="table-header-row">
+								<th className="table-header-cell">Internal ID</th>
+								<th className="table-header-cell">Name</th>
 							</tr>
 						</thead>
 						<tbody>
 							{leadSourcesArray.map((source) => (
-								<tr key={source.id} className="border-b border-slate-200">
-									<td className="py-1 px-2">{source.id}</td>
-									<td className="py-1 px-2">{source.name}</td>
+								<tr key={source.id} className="table-row">
+									<td className="table-cell">{source.id}</td>
+									<td className="table-cell">{source.name}</td>
 								</tr>
 							))}
 						</tbody>
 					</table>
 				</div>
 			)}
-		</div>
+		</Card>
 	);
 }
 
