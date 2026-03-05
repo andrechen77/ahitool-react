@@ -54,7 +54,7 @@ export async function requestFromJobNimbus(
 // possibly cached
 async function getSettings(): Promise<unknown> {
     return await cachedOrCalculate("settings", async () => {
-        await requestFromJobNimbus("account/settings", {}).then(r => r.json())
+        return await requestFromJobNimbus("account/settings", {}).then(r => r.json());
     });
 }
 

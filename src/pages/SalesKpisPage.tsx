@@ -4,6 +4,7 @@ import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import { getAllJobActivities, getJobStatuses } from '../lib/job_nimbus/api';
 import type { JnActivity } from '../lib/job_nimbus/types';
+import JnClient from '../components/JnClient';
 
 const DEFAULT_GRAPH_SETTINGS = 'a: b, c\nd: e, f';
 
@@ -35,8 +36,11 @@ function SalesKpisPage() {
 
 	return (
 		<section>
-			<h1>Sales KPIs</h1>
-			<button onClick={openModal} style={{ marginTop: '1rem', display: 'block' }}>
+			<h1 className="text-2xl font-bold">Sales KPIs</h1>
+
+			<JnClient />
+
+			<button onClick={openModal} className="bg-blue-500 text-white px-4 py-2 rounded-md my-2 cursor-pointer">
 				Update API Key
 			</button>
 
@@ -65,7 +69,7 @@ function SalesKpisPage() {
 				/>
 			</div>
 
-			<button onClick={calculateSankeyData} className="bg-blue-500 text-white px-4 py-2 rounded-md">Generate Sankey Diagram</button>
+			<button onClick={calculateSankeyData} className="bg-blue-500 text-white px-4 py-2 rounded-md cursor-pointer">Generate Sankey Diagram</button>
 
 			<div style={{ marginTop: '2rem' }}>
 				<Plot
