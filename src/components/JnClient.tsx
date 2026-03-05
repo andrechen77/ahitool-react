@@ -1,5 +1,6 @@
 import { FaSyncAlt } from 'react-icons/fa';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
+import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
 import { useEffect } from 'react';
 
 function JnClient() {
@@ -11,6 +12,8 @@ function JnClient() {
 		isLoading,
 		refresh,
 	} = useJobNimbusData();
+
+	const { openModal } = useApiKeyModal();
 
 	useEffect(() => {
 		refresh(false);
@@ -42,6 +45,9 @@ function JnClient() {
 			<p>
 				<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
 			</p>
+			<button onClick={openModal} className="bg-gray-500 text-white px-4 py-2 rounded-md my-2 cursor-pointer">
+				Update API Key
+			</button>
 		</div>
 	);
 }
