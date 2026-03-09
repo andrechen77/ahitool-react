@@ -78,10 +78,6 @@ function SalesKpisPage() {
 	const [minJobsPerFlow, setMinJobsPerFlow] = useSavedState<string>("sales-kpis:min_jobs_per_flow", String, String, () => "");
 
 	const [plotlyLayout] = useState({
-		title: {
-			text: 'Sales Flows',
-			font: { size: 12 },
-		},
 		autosize: true,
 	});
 
@@ -187,7 +183,20 @@ function SalesKpisPage() {
 			<JnClient />
 
 			<Card className="mt-8">
-				<h2 className="mb-2">Graph settings</h2>
+				<h2 className="mb-2">Job Flows</h2>
+
+				<Plot
+					data={plotlyInputData}
+					layout={plotlyLayout}
+					useResizeHandler
+				/>
+
+				<Button onClick={calculateSankeyData} size="md" className="mt-4">
+					Generate Sankey Diagram
+				</Button>
+
+				<hr className="my-6" />
+
 				<div>
 					<div className="mb-2 flex items-center justify-between">
 						<h3>Status groups</h3>
@@ -240,6 +249,7 @@ function SalesKpisPage() {
 						</div>
 					)}
 				</div>
+
 				<div className="mt-4">
 					<h3 className="mb-2">Other graph settings</h3>
 					<div className="w-48">
@@ -255,20 +265,7 @@ function SalesKpisPage() {
 						/>
 					</div>
 				</div>
-
-				<Button onClick={calculateSankeyData} size="md" className="mt-4">
-					Generate Sankey Diagram
-				</Button>
 			</Card>
-
-
-			<div style={{ marginTop: '2rem' }}>
-				<Plot
-					data={plotlyInputData}
-					layout={plotlyLayout}
-					useResizeHandler
-				/>
-			</div>
 		</section>
 	);
 }
