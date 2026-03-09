@@ -5,6 +5,8 @@ import { jnCacheLoadOrCalculate } from "./indexed_db";
 import { JobMilestone } from "./domain";
 import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
+const API_BASE = import.meta.env.VITE_API_BASE ?? ""; // empty => same origin
+
 export class ApiKeyError extends Error {
     /// The API key that was used when the error occurred, or null if one wa
     /// not provided.
@@ -27,7 +29,7 @@ export async function requestFromJobNimbus(
     const queryString = params && Object.keys(params).length > 0
         ? '?' + new URLSearchParams(params).toString()
         : '';
-    const url = `http://localhost:8080/api1/${endpoint}${queryString}`;
+    const url = `${API_BASE}/api/jobnimbus/api1/${endpoint}${queryString}`;
 
     // get the api key
     const token = localStorage.getItem('job_nimbus_api_key');

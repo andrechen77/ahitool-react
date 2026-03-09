@@ -25,40 +25,42 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 	const refresh = async (allowFetch: boolean) => {
 		setIsLoading(true);
 
-		if (allowFetch) {
-			await jnCacheClear();
-		}
-
-		setStatuses({});
-		setLeadSources({});
-		setJobsByJnid({});
-		setActivitiesByJobJnid({});
-
-		const statuses = await getJobStatuses(allowFetch);
-		setStatuses(statuses);
-
-		const leadSources = await getLeadSources(allowFetch);
-		setLeadSources(leadSources);
-
-		const jobs = await getAllJobBaseData(allowFetch);
-		const jobsByJnidMap = jobs.reduce((acc, job) => {
-			acc[job.jnid] = job;
-			return acc;
-		}, {} as Record<string, JobBaseData>);
-		setJobsByJnid(jobsByJnidMap);
-
-		const activities = await getAllJobActivities(allowFetch);
-		const activitiesByJnid = activities.reduce((acc, activity) => {
-			const jnid = activity.primaryJnid;
-			if (!acc[jnid]) {
-				acc[jnid] = [];
+		try {
+			if (allowFetch) {
+				await jnCacheClear();
 			}
-			acc[jnid].push(activity);
-			return acc;
-		}, {} as Record<string, JnActivity[]>);
-		setActivitiesByJobJnid(activitiesByJnid);
 
-		setIsLoading(false);
+			setStatuses({});
+			setLeadSources({});
+			setJobsByJnid({});
+			setActivitiesByJobJnid({});
+
+			const statuses = await getJobStatuses(allowFetch);
+			setStatuses(statuses);
+
+			const leadSources = await getLeadSources(allowFetch);
+			setLeadSources(leadSources);
+
+			const jobs = await getAllJobBaseData(allowFetch);
+			const jobsByJnidMap = jobs.reduce((acc, job) => {
+				acc[job.jnid] = job;
+				return acc;
+			}, {} as Record<string, JobBaseData>);
+			setJobsByJnid(jobsByJnidMap);
+
+			const activities = await getAllJobActivities(allowFetch);
+			const activitiesByJnid = activities.reduce((acc, activity) => {
+				const jnid = activity.primaryJnid;
+				if (!acc[jnid]) {
+					acc[jnid] = [];
+				}
+				acc[jnid].push(activity);
+				return acc;
+			}, {} as Record<string, JnActivity[]>);
+			setActivitiesByJobJnid(activitiesByJnid);
+		} finally {
+			setIsLoading(false);
+		}
 	};
 
 	const value: JobNimbusDataContextType = {

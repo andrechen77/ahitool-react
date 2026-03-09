@@ -11,7 +11,7 @@
 		"enabled": true
 	},
 	"assets": {
-		"directory": "public",
+		"directory": "../dist",
 		"binding": "ASSETS"
 	},
 	"compatibility_flags": [
