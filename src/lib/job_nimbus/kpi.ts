@@ -3,16 +3,17 @@ import type { JobStatus, JnActivity, JobBaseData } from "./domain";
 
 type StatusHistoryEntry = {
     timestamp: Date,
-    status: JobStatus | null,
+    status: string | null,
 };
 
 // Construct job status history from activities
-function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobStatus): StatusHistoryEntry[] {
+function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobStatus): { history: StatusHistoryEntry[], inconsistencies: number[] } {
     const sortedActivities = [...activities].sort(
         (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
 
     let history: StatusHistoryEntry[] = [];
+    let inconsistencies: number[] = [];
     for (const activity of sortedActivities) {
         if (activity.type === "job_created") {
             history.push({ timestamp: activity.timestamp, status: null });
@@ -21,18 +22,12 @@ function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobS
             if (history.length > 0) {
                 const lastEntry = history.at(-1)!;
                 if (lastEntry.status === null) {
-                    lastEntry.status = activity.oldStatus;
-                } else if (lastEntry.status.id !== activity.oldStatus.id) {
-                    console.warn(
-                        `Job status history inconsistency detected: at ${activity.timestamp}, ` +
-                        `the old status was ${activity.oldStatus.name}, but the previous entry ` +
-                        `in the history was ${lastEntry.status.name}`,
-                    );
+                    lastEntry.status = activity.oldStatusName;
+                } else if (lastEntry.status !== activity.oldStatusName) {
+                    inconsistencies.push(history.length);
                 }
             }
-            history.push({ timestamp: activity.timestamp, status: activity.newStatus });
-        } else if (activity.type === "job_modified") {
-            console.log("");
+            history.push({ timestamp: activity.timestamp, status: activity.newStatusName });
         }
     }
 
@@ -40,16 +35,13 @@ function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobS
     if (history.length > 0) {
         const lastEntry = history.at(-1)!;
         if (lastEntry.status === null) {
-            lastEntry.status = currentStatus;
-        } else if (lastEntry.status.id !== currentStatus.id) {
-            console.warn(
-                `Job status history inconsistency detected: at ${lastEntry.timestamp}, ` +
-                `the status was ${lastEntry.status.name}, but the final status is ${currentStatus.name}`,
-            );
+            lastEntry.status = currentStatus.name;
+        } else if (lastEntry.status !== currentStatus.name) {
+            inconsistencies.push(history.length - 1);
         }
     }
 
-    return history;
+    return { history, inconsistencies };
 }
 
 export interface KpiSankeyData {
@@ -67,9 +59,15 @@ export async function generateKpiGraph(
 ): Promise<{ data: KpiSankeyData, invisibleJobs: string[] }> {
     let jobGraph = new JobGraphEmbedding(statusGroups, true);
     let invisibleJobs: string[] = [];
-    for (const [jobJnid, activities] of Object.entries(activitiesByJobJnid)) {
-        const statusHistory = constructJobStatusHistory(activities, jobsByJnid[jobJnid].status);
-        const numEdges = jobGraph.addJob(jobJnid, statusHistory);
+    for (const [jobJnid, job] of Object.entries(jobsByJnid)) {
+        const activities = activitiesByJobJnid[jobJnid] ?? [];
+        const { history, inconsistencies } = constructJobStatusHistory(activities, job.status);
+        for (const inconsistency of inconsistencies) {
+            console.warn(
+                `Job status history inconsistency detected for job ${jobJnid}: at ${history[inconsistency].timestamp}`
+            );
+        }
+        const numEdges = jobGraph.addJob(jobJnid, history);
         if (numEdges === 0) {
             invisibleJobs.push(jobJnid);
         }
@@ -79,16 +77,16 @@ export async function generateKpiGraph(
 }
 
 class JobGraphEmbedding {
-    // Maps each status id to the name of the node that corresponds to that status.
-    private statusToNode: Partial<Record<number, string>>;
+    // Maps each status name to the name of the node that corresponds to that status.
+    private statusToNode: Partial<Record<string, string>>;
     private removeCycles: boolean;
     private graph: Graph<{}, { jobJnids: string[], totalDurationMs: number }>;
 
     constructor(statusGroups: { [statusGroup: string]: JobStatus[] }, removeCycles: boolean) {
-        let statusToNode: { [statusId: number]: string } = {};
+        let statusToNode: { [statusId: string]: string } = {};
         for (const [nickname, statuses] of Object.entries(statusGroups)) {
             for (const status of statuses) {
-                statusToNode[status.id] = nickname;
+                statusToNode[status.name] = nickname;
             }
         }
         this.statusToNode = statusToNode;
@@ -117,7 +115,7 @@ class JobGraphEmbedding {
                 if (status == null) {
                     continue;
                 }
-                const nodeName: string | undefined = this.statusToNode[status.id];
+                const nodeName: string | undefined = this.statusToNode[status];
                 if (nodeName !== undefined && nodeName !== lastNode) {
                     if (this.removeCycles && seenNodes.has(nodeName)) {
                         // we've seen this node before, so remove the cycle

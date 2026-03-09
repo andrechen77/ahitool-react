@@ -26,7 +26,10 @@ async function getJnDb(): Promise<IDBDatabase> {
     return db;
 }
 
-export async function cachedOrCalculate<T>(key: string, calculate: () => Promise<T>): Promise<T> {
+export async function jnCacheLoadOrCalculate<T>(
+    key: string,
+    calculate: () => Promise<T>,
+): Promise<T> {
     const cached = await jnCacheLoad(key);
     if (cached !== undefined) {
         return cached as T;
@@ -36,7 +39,7 @@ export async function cachedOrCalculate<T>(key: string, calculate: () => Promise
     return value;
 }
 
-async function jnCacheLoad(key: string): Promise<unknown> {
+async function jnCacheLoad<T>(key: string): Promise<T | undefined> {
     const db = await getJnDb();
     const tx = db.transaction(STORE_NAME_CACHE, "readonly");
     const store = tx.objectStore(STORE_NAME_CACHE);

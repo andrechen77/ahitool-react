@@ -10,7 +10,7 @@ interface JobNimbusDataContextType {
 	statuses: JobStatusRegistry;
 	leadSources: JobLeadSourceRegistry;
 	isLoading: boolean;
-	refresh: (clearCache: boolean) => Promise<void>;
+	refresh: (forceFetch: boolean) => Promise<void>;
 }
 
 const JobNimbusDataContext = createContext<JobNimbusDataContextType | undefined>(undefined);
@@ -22,10 +22,10 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 	const [leadSources, setLeadSources] = useState<JobLeadSourceRegistry>({});
 	const [isLoading, setIsLoading] = useState(false);
 
-	const refresh = async (clearCache: boolean) => {
+	const refresh = async (allowFetch: boolean) => {
 		setIsLoading(true);
 
-		if (clearCache) {
+		if (allowFetch) {
 			await jnCacheClear();
 		}
 
@@ -34,20 +34,20 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 		setJobsByJnid({});
 		setActivitiesByJobJnid({});
 
-		const statuses = await getJobStatuses();
+		const statuses = await getJobStatuses(allowFetch);
 		setStatuses(statuses);
 
-		const leadSources = await getLeadSources();
+		const leadSources = await getLeadSources(allowFetch);
 		setLeadSources(leadSources);
 
-		const jobs = await getAllJobBaseData();
+		const jobs = await getAllJobBaseData(allowFetch);
 		const jobsByJnidMap = jobs.reduce((acc, job) => {
 			acc[job.jnid] = job;
 			return acc;
 		}, {} as Record<string, JobBaseData>);
 		setJobsByJnid(jobsByJnidMap);
 
-		const activities = await getAllJobActivities();
+		const activities = await getAllJobActivities(allowFetch);
 		const activitiesByJnid = activities.reduce((acc, activity) => {
 			const jnid = activity.primaryJnid;
 			if (!acc[jnid]) {

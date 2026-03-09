@@ -51,11 +51,11 @@ export interface JnActivityBase {
     primaryJnid: string;
     timestamp: Date;
     recordTypeName: string;
-    text: string;
+    note: string;
 }
 export type JnActivity = JnActivityBase & (
     | { type: "generic" }
     | { type: "job_created" }
-    | { type: "status_changed"; oldStatus: JobStatus; newStatus: JobStatus }
+    | { type: "status_changed"; oldStatusName: string; newStatusName: string }
     | { type: "job_modified"; updates: { [key: string]: [string, string] } }
 )

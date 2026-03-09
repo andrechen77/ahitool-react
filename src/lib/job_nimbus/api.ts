@@ -1,7 +1,7 @@
 // functions for interacting with the JobNimbus API and parsing the responses
 
 import { assertArray, assertObject } from "../types";
-import { cachedOrCalculate } from "./indexed_db";
+import { jnCacheLoadOrCalculate } from "./indexed_db";
 import { JobMilestone } from "./domain";
 import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
@@ -51,15 +51,23 @@ export async function requestFromJobNimbus(
 }
 
 // gets the contents of https://app.jobnimbus.com/api1/account/settings,
-// possibly cached
-async function getSettings(): Promise<unknown> {
-    return await cachedOrCalculate("settings", async () => {
-        return await requestFromJobNimbus("account/settings", {}).then(r => r.json());
+// possibly cached. returns undefined if there are no settings but fetch is not
+// allowed
+async function getSettings(allowFetch: boolean): Promise<unknown> {
+    return await jnCacheLoadOrCalculate("settings", async () => {
+        if (allowFetch) {
+            return await requestFromJobNimbus("account/settings", {}).then(r => r.json());
+        } else {
+            return undefined;
+        }
     });
 }
 
-export async function getJobStatuses(): Promise<JobStatusRegistry> {
-    const settings = await getSettings();
+export async function getJobStatuses(allowFetch: boolean): Promise<JobStatusRegistry> {
+    const settings = await getSettings(allowFetch);
+    if (typeof settings === "undefined") {
+        return {};
+    }
     assertObject(settings);
 
     const allWorkflows = settings["workflows"];
@@ -80,8 +88,11 @@ export async function getJobStatuses(): Promise<JobStatusRegistry> {
     return statuses;
 }
 
-export async function getLeadSources(): Promise<JobLeadSourceRegistry> {
-    const settings = await getSettings();
+export async function getLeadSources(allowFetch: boolean): Promise<JobLeadSourceRegistry> {
+    const settings = await getSettings(allowFetch);
+    if (typeof settings === "undefined") {
+        return {};
+    }
     assertObject(settings);
     assertArray(settings["sources"]);
 
@@ -116,46 +127,104 @@ async function getAllFromJobNimbus(endpoint: string, params: Record<string, stri
     return results;
 }
 
-export async function getAllJobActivitiesUnparsed(): Promise<unknown[]> {
-    return await cachedOrCalculate("activities", async () => {
-        return await getAllFromJobNimbus(
-            "activities",
-            {
-                "filter": JSON.stringify({
-                    "must": [
-                        {
-                            "term": {
-                                "is_status_change": true,
-                            },
-                        },
-                        {
-                            "term": {
-                                "primary.type": "job"
+async function* getAllJobActivitiesUnparsedGenerator(): AsyncGenerator<unknown> {
+    const endpoint = "activities";
+    const resultKey = "activity";
+    const maxPerRequest = 1000;
+    // use this key to paginate; the API limits the number of records returned
+    // (in terms of `from + size`) to 1000, so we need to do our own kind of
+    // pagination
+    const dateKey = "date_created";
+
+    let earliestDate: Date = new Date();
+
+    let lastNumRetrieved = 0;
+    let seenJnids: Set<string> = new Set();
+    let numRequests = 0;
+    do {
+        const params = {
+            "size": String(maxPerRequest),
+            "filter": JSON.stringify({
+                "must": [
+                    {
+                        "term": {
+                            "primary.type": "job"
+                        }
+                    },
+                    {
+                        "range": {
+                            [dateKey]: {
+                                "lte": Math.floor(earliestDate.getTime() / 1000),
                             }
-                        },
-                    ]
-                })
-            },
-            "activity",
-        );
+                        }
+                    }
+                ]
+            }),
+        };
+        const response: unknown = await requestFromJobNimbus(endpoint, params).then(r => r.json());
+        assertObject(response);
+        const newResults = response[resultKey];
+        assertArray(newResults);
+        lastNumRetrieved = newResults.length;
+
+        let nextSeenJnids = new Set<string>();
+        for (const activity of newResults) {
+            assertObject(activity);
+
+            // yield the activity if we haven't seen it yet. at least one
+            // activity of every query after the first one is a duplicate
+            // because the date condition is <= instead of <
+            const jnid = activity["jnid"] as string;
+            if (!seenJnids.has(jnid)) {
+                yield activity;
+            }
+            nextSeenJnids.add(jnid);
+
+            // update the earliest date
+            let dateCreated = new Date(Number(activity[dateKey]) * 1000);
+            if (dateCreated < earliestDate) {
+                earliestDate = dateCreated;
+            }
+        }
+
+        numRequests++;
+        seenJnids = nextSeenJnids;
+    } while (numRequests < 100 && lastNumRetrieved >= maxPerRequest);
+}
+
+export async function getAllJobActivitiesUnparsed(allowFetch: boolean): Promise<unknown[]> {
+    return await jnCacheLoadOrCalculate("activities", async () => {
+        if (allowFetch) {
+            let results: unknown[] = [];
+            for await (const activity of getAllJobActivitiesUnparsedGenerator()) {
+                results.push(activity);
+            }
+            return results;
+        } else {
+            return [];
+        }
     });
 }
 
-export async function getAllJobActivities(): Promise<JnActivity[]> {
-    const activities = await getAllJobActivitiesUnparsed();
-    const statuses = await getJobStatuses();
+export async function getAllJobActivities(allowFetch: boolean): Promise<JnActivity[]> {
+    const activities = await getAllJobActivitiesUnparsed(allowFetch);
+    const statuses = await getJobStatuses(allowFetch);
     return activities.map(activity => parseJnActivity(activity, statuses));
 }
 
-export async function getAllJobBaseData(): Promise<JobBaseData[]> {
-    const data = await cachedOrCalculate("base_data", async () => {
-        return await getAllFromJobNimbus(
-            "jobs",
-            {},
-            "results",
-        );
+export async function getAllJobBaseData(allowFetch: boolean): Promise<JobBaseData[]> {
+    const data = await jnCacheLoadOrCalculate("base_data", async () => {
+        if (allowFetch) {
+            return await getAllFromJobNimbus(
+                "jobs",
+                {},
+                "results",
+            );
+        } else {
+            return [];
+        }
     });
-    const statuses = await getJobStatuses();
+    const statuses = await getJobStatuses(allowFetch);
     return data.map(job => parseJobBaseData(job, statuses));
 }
 
@@ -183,13 +252,13 @@ function parseActivityBase(json: { [key: string]: unknown }): JnActivityBase {
         throw new Error("Invalid activity: missing or invalid record_type_name");
     }
 
-    const text = typeof json.note === "string" ? json.note : "";
+    const note = typeof json.note === "string" ? json.note : "";
 
     return {
         primaryJnid,
         timestamp,
         recordTypeName,
-        text,
+        note,
     };
 }
 
@@ -231,28 +300,42 @@ function parseJnActivity(
                 const oldStatusId = jobInfo["old_status"];
                 const newStatusId = jobInfo["new_status"];
 
-                if (typeof oldStatusId !== "number" || typeof newStatusId !== "number") {
-                    throw new Error("Missing or invalid status IDs in status change activity");
-                }
-
-                const oldStatus = statuses[oldStatusId];
-                const newStatus = statuses[newStatusId];
-
-                if (!oldStatus || !newStatus) {
-                    throw new Error(
-                        `Status not found: old=${oldStatusId}, new=${newStatusId}`,
-                    );
+                let oldStatusName;
+                let newStatusName;
+                if (typeof oldStatusId === "number" && typeof newStatusId === "number") {
+                    const oldStatus = statuses[oldStatusId];
+                    const newStatus = statuses[newStatusId];
+                    if (!oldStatus || !newStatus) {
+                        throw new Error(
+                            `Status not found: old=${oldStatusId}, new=${newStatusId}`,
+                        );
+                    }
+                    oldStatusName = oldStatus.name;
+                    newStatusName = newStatus.name;
+                } else {
+                    // fall back to trying to find the statuses in the note
+                    const updates = parseJobUpdates(base.note);
+                    const statusUpdate = updates["Status"];
+                    if (statusUpdate) {
+                        [oldStatusName, newStatusName] = statusUpdate;
+                    } else {
+                        return {
+                            ...base,
+                            type: "job_modified",
+                            updates,
+                        };
+                    }
                 }
 
                 return {
                     ...base,
                     type: "status_changed",
-                    oldStatus,
-                    newStatus,
+                    oldStatusName,
+                    newStatusName,
                 };
             }
             case "Job Modified": {
-                const updates = parseJobUpdates(base.text);
+                const updates = parseJobUpdates(base.note);
                 return {
                     ...base,
                     type: "job_modified",
