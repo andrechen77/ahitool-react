@@ -7,7 +7,7 @@ type StatusHistoryEntry = {
 };
 
 // Construct job status history from activities
-function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobStatus): { history: StatusHistoryEntry[], inconsistencies: number[] } {
+function constructJobStatusHistory(baseData: JobBaseData, activities: JnActivity[]): { history: StatusHistoryEntry[], inconsistencies: number[] } {
     const sortedActivities = [...activities].sort(
         (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
@@ -31,14 +31,29 @@ function constructJobStatusHistory(activities: JnActivity[], currentStatus: JobS
         }
     }
 
-    // if the latest status cannot be inferred from the status changes, add a final status
-    if (history.length > 0) {
-        const lastEntry = history.at(-1)!;
+    // check consistency of the current status
+    const lastEntry = history.at(-1);
+    const currentStatus = baseData.status;
+    const currentStatusModDate = baseData.statusModDate;
+    if (lastEntry) {
         if (lastEntry.status === null) {
+            // our history has a missing status; fill it in with the current status
             lastEntry.status = currentStatus.name;
         } else if (lastEntry.status !== currentStatus.name) {
-            inconsistencies.push(history.length - 1);
+            // our history's last entry is inconsistent with the current status.
+            if (currentStatusModDate && currentStatusModDate > lastEntry.timestamp) {
+                // we can add an additional entry to make it consistent again
+                history.push({ timestamp: currentStatusModDate, status: currentStatus.name });
+            } else {
+                // we cannot add an additional entry to make it consistent again.
+                // throw up our hands
+                inconsistencies.push(history.length);
+            }
         }
+    } else {
+        // add an additional entry for the current status
+        const timestamp = currentStatusModDate ?? baseData.createdDate;
+        history.push({ timestamp, status: currentStatus.name });
     }
 
     return { history, inconsistencies };
@@ -61,11 +76,13 @@ export async function generateKpiGraph(
     let invisibleJobs: string[] = [];
     for (const [jobJnid, job] of Object.entries(jobsByJnid)) {
         const activities = activitiesByJobJnid[jobJnid] ?? [];
-        const { history, inconsistencies } = constructJobStatusHistory(activities, job.status);
+        const { history, inconsistencies } = constructJobStatusHistory(job, activities);
         for (const inconsistency of inconsistencies) {
-            console.warn(
-                `Job status history inconsistency detected for job ${jobJnid}: at ${history[inconsistency].timestamp}`
-            );
+            if (inconsistency === history.length) {
+                console.warn(`Job status history inconsistency detected for job ${jobJnid}: final status does not match history`)
+            } else {
+                console.warn(`Job status history inconsistency detected for job ${jobJnid}: at ${history[inconsistency].timestamp}`);
+            }
         }
         const numEdges = jobGraph.addJob(jobJnid, history);
         if (numEdges === 0) {

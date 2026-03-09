@@ -34,6 +34,7 @@ export type JobLeadSourceRegistry = Record<number, JobLeadSource>;
 
 export interface JobBaseData {
     jnid: string;
+    createdDate: Date;
     milestoneDates: MilestoneDates;
     status: JobStatus;
     statusModDate?: Date | null;

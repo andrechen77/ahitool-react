@@ -356,6 +356,7 @@ function parseJnActivity(
 const RAW_JOB_BASE_DATA_KEYS = {
     JNID: "jnid",
     STATUS: "status",
+    DATE_CREATED: "date_created",
     DATE_STATUS_CHANGE: "date_status_change",
     SALES_REP_NAME: "sales_rep_name",
     INSURANCE_CHECKBOX: "Insurance Job?",
@@ -402,6 +403,11 @@ export function parseJobBaseData(
         throw new Error("Missing or invalid jnid field");
     }
 
+    const createdDate = getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.DATE_CREATED);
+    if (createdDate === null) {
+        throw new Error("Missing or invalid date_created field");
+    }
+
     // get the job status
     const statusIdValue = getNumber(RAW_JOB_BASE_DATA_KEYS.STATUS);
     const status = statusIdValue ? statuses[statusIdValue] : undefined;
@@ -439,6 +445,7 @@ export function parseJobBaseData(
 
     return {
         jnid,
+        createdDate,
         milestoneDates,
         status,
         statusModDate,
