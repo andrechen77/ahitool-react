@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 
 interface ApiKeyModalContextType {
 	isOpen: boolean,
-	openModal: () => void,
+	message: string | null,
+	openModal: (message: string | null) => void,
 	closeModal: () => void,
 }
 
@@ -11,10 +12,18 @@ const ApiKeyModalContext = createContext<ApiKeyModalContextType | undefined>(und
 
 export function ApiKeyModalProvider({ children }: { children: ReactNode }) {
 	const [isOpen, setIsOpen] = useState(false);
+	const [message, setMessage] = useState<string | null>(null);
 	const value = {
 		isOpen,
-		openModal: () => setIsOpen(true),
-		closeModal: () => setIsOpen(false),
+		message,
+		openModal: (message: string | null) => {
+			setIsOpen(true);
+			setMessage(message);
+		},
+		closeModal: () => {
+			setIsOpen(false);
+			setMessage(null);
+		},
 	};
 
 	return (

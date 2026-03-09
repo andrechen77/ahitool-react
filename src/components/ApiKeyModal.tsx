@@ -8,7 +8,7 @@ import { Button } from './ui/Button';
 type FormOnSubmit = React.ComponentPropsWithoutRef<'form'>['onSubmit'];
 
 export function ApiKeyModal() {
-	const { isOpen, closeModal } = useApiKeyModal();
+	const { isOpen, message, closeModal } = useApiKeyModal();
 	const [apiKey, setApiKey] = useState('');
 	const [textType, setTextType] = useState<'password' | 'text'>('password');
 
@@ -42,6 +42,7 @@ export function ApiKeyModal() {
 				<p className="mb-6 text-sm text-slate-600">
 					A JobNimbus API key is required to access JobNimbus data.
 				</p>
+				{message && <p className="mb-6 text-sm text-slate-600">{message}</p>}
 				<form onSubmit={handleApiKeySubmit}>
 					<div className="relative mb-6">
 						<Input

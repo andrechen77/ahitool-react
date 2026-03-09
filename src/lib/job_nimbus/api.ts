@@ -12,10 +12,10 @@ export class ApiKeyError extends Error {
     /// not provided.
     public key: string | null;
 
-    constructor(message: string) {
+    constructor(message: string, key: string | null) {
         super(message);
         this.name = 'ApiKeyError';
-        this.key = null;
+        this.key = key;
     }
 }
 
@@ -34,7 +34,7 @@ export async function requestFromJobNimbus(
     // get the api key
     const token = localStorage.getItem('job_nimbus_api_key');
     if (!token) {
-        throw new ApiKeyError('No JobNimbus authentication token found in localStorage (job_nimbus_api_key)');
+        throw new ApiKeyError('No JobNimbus API key found', null);
     }
 
     // fetch the data
@@ -48,8 +48,14 @@ export async function requestFromJobNimbus(
             },
         }
     );
-    console.log(`response for ${url} complete: ${response.status} ${response.statusText}`);
-    return response;
+    if (response.status === 200) {
+        console.log(`response for ${url} complete: ${response.status} ${response.statusText}`);
+        return response;
+    } else if (response.status === 401) {
+        throw new ApiKeyError('Invalid JobNimbus API key', token);
+    } else {
+        throw new Error(`Unexpected response from JobNimbus: ${response.status} ${response.statusText}`);
+    }
 }
 
 // gets the contents of https://app.jobnimbus.com/api1/account/settings,

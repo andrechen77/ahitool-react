@@ -5,8 +5,9 @@ import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { cn } from '../util/cn';
+import { ApiKeyError } from '../lib/job_nimbus/api';
 
-type Tab = 'overview' | 'statuses' | 'leadSources';
+type Tab = 'overview' | 'statuses' | 'leadSources' | 'jobs';
 
 function JnClient() {
 	const {
@@ -20,6 +21,7 @@ function JnClient() {
 
 	const { openModal } = useApiKeyModal();
 	const [activeTab, setActiveTab] = useState<Tab>('overview');
+	const [jobJnidQuery, setJobJnidQuery] = useState('');
 
 	useEffect(() => {
 		refresh(false);
@@ -28,12 +30,24 @@ function JnClient() {
 	const statusesArray = Object.values(statuses);
 	const leadSourcesArray = Object.values(leadSources);
 
+	const handleRefresh = async () => {
+		try {
+			await refresh(true);
+		} catch (error) {
+			if (error instanceof ApiKeyError) {
+				openModal("Invalid API key");
+			} else {
+				throw error;
+			}
+		}
+	}
+
 	return (
 		<Card className="my-2">
 			<div className="flex items-center gap-2 mb-4">
-				<h2 className="text-lg font-bold">JobNimbus Data</h2>
+				<h2>JobNimbus Data</h2>
 				<Button
-					onClick={() => refresh(true)}
+					onClick={handleRefresh}
 					variant="ghost"
 					icon
 					disabled={isLoading}
@@ -72,6 +86,15 @@ function JnClient() {
 					>
 						Lead Sources
 					</button>
+					<button
+						onClick={() => setActiveTab('jobs')}
+						className={cn(
+							'tab',
+							activeTab === 'jobs' ? 'tab-active' : 'tab-inactive',
+						)}
+					>
+						Jobs
+					</button>
 				</div>
 			</div>
 
@@ -91,7 +114,7 @@ function JnClient() {
 					<p>
 						<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
 					</p>
-					<Button type="button" variant="secondary" onClick={openModal}>
+					<Button type="button" variant="secondary" onClick={() => openModal(null)}>
 						Update API Key
 					</Button>
 				</div>
@@ -136,6 +159,47 @@ function JnClient() {
 							))}
 						</tbody>
 					</table>
+				</div>
+			)}
+
+			{activeTab === 'jobs' && (
+				<div className="space-y-4">
+					<div>
+						<label className="block text-sm font-medium mb-1" htmlFor="job-jnid-input">
+							Job JNID
+						</label>
+						<input
+							id="job-jnid-input"
+							type="text"
+							value={jobJnidQuery}
+							onChange={(e) => setJobJnidQuery(e.target.value)}
+							placeholder="Enter a Job JNID"
+							className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
+						/>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="border border-slate-200 rounded-md p-2 bg-slate-50">
+							<h3 className="font-semibold mb-2 text-sm">jobsByJnid</h3>
+							<pre className="text-xs whitespace-pre-wrap break-all max-h-80 overflow-auto">
+								{JSON.stringify(
+									jobJnidQuery ? jobsByJnid[jobJnidQuery] ?? null : null,
+									null,
+									2,
+								)}
+							</pre>
+						</div>
+						<div className="border border-slate-200 rounded-md p-2 bg-slate-50">
+							<h3 className="font-semibold mb-2 text-sm">activitiesByJobJnid</h3>
+							<pre className="text-xs whitespace-pre-wrap break-all max-h-80 overflow-auto">
+								{JSON.stringify(
+									jobJnidQuery ? activitiesByJobJnid[jobJnidQuery] ?? null : null,
+									null,
+									2,
+								)}
+							</pre>
+						</div>
+					</div>
 				</div>
 			)}
 		</Card>
