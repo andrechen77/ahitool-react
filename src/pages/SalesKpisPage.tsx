@@ -49,18 +49,40 @@ function SalesKpisPage() {
 		jobs: [],
 		averageDurationMs: [],
 	});
+	const plotlyInputData = useMemo(() => {
+		return [{
+			type: 'sankey' as const,
+			name: 'Job Milestone Flow',
+			orientation: 'h' as const,
+			node: {
+				pad: 15,
+				thickness: 20,
+				line: { color: '#000', width: 0.5 },
+				label: sankeyData.nodeNames,
+			},
+			link: {
+				source: sankeyData.sourceIds,
+				target: sankeyData.targetIds,
+				value: sankeyData.jobs.map(jobs => jobs.length),
+				hovertemplate: "%{source.label} -> %{target.label}<br>Number of jobs: %{value}<br>Average duration: %{customdata:.0f} days",
+				customdata: sankeyData.averageDurationMs.map(d => d / 86400000),
+			},
+		}];
+	}, [sankeyData]);
 	const statusOptions = useMemo<StatusOption[]>(() => {
 		return Object.values(statuses).map((status) => ({
 			value: status.id,
 			label: `${status.name} (${status.id})`,
 		}));
 	}, [statuses]);
+	const [minJobsPerFlow, setMinJobsPerFlow] = useSavedState<string>("sales-kpis:min_jobs_per_flow", String, String, () => "");
 
-	const [sankeyLayout] = useState({
+	const [plotlyLayout] = useState({
 		title: {
-			text: 'Sales Flow (placeholder Sankey)',
+			text: 'Sales Flows',
 			font: { size: 12 },
 		},
+		autosize: true,
 	});
 
 	const availableOptionsByGroupId = useMemo<Record<string, StatusOption[]>>(
@@ -93,11 +115,9 @@ function SalesKpisPage() {
 			activationConstraint: { distance: 5 },
 		}),
 	);
-
 	const handleDeleteLastGroup = () => {
 		setStatusGroups((prev) => prev.slice(0, -1));
 	};
-
 	const handleAddGroup = () => {
 		setStatusGroups((prev) => [
 			...prev,
@@ -109,19 +129,16 @@ function SalesKpisPage() {
 		]);
 		setNextGroupId((prev) => prev + 1);
 	};
-
 	const handleGroupNameChange = (id: string, name: string) => {
 		setStatusGroups((prev) =>
 			prev.map((group) => (group.id === id ? { ...group, name } : group)),
 		);
 	};
-
 	const handleGroupStatusesChange = (id: string, statusIds: number[]) => {
 		setStatusGroups((prev) =>
 			prev.map((group) => (group.id === id ? { ...group, statusIds } : group)),
 		);
 	};
-
 	const handleDragEnd = (event: DragEndEvent) => {
 		const { active, over } = event;
 		if (!over || active.id === over.id) {
@@ -144,97 +161,111 @@ function SalesKpisPage() {
 			return acc;
 		}, {} as Record<string, JobStatus[]>);
 		const { data, invisibleJobs } = await generateKpiGraph(statusGroupsObj, activitiesByJobJnid, jobsByJnid);
-		console.log(`${invisibleJobs.length} jobs were not included in the graph because they had no edges`, invisibleJobs);
+
+		const minJobsPerFlowVal = Number(minJobsPerFlow);
+		for (let i = 0; i < data.jobs.length; i++) {
+			if (data.jobs[i].length < minJobsPerFlowVal) {
+				invisibleJobs.push(...data.jobs[i]);
+
+				data.jobs.splice(i, 1);
+				data.sourceIds.splice(i, 1);
+				data.targetIds.splice(i, 1);
+				data.averageDurationMs.splice(i, 1);
+
+				i--;
+			}
+		}
+
+		console.log(`${invisibleJobs.length} jobs are not visible in the graph`, invisibleJobs);
 		setSankeyData(data);
 	};
 
 	return (
 		<section>
-			<h1 className="text-2xl font-bold">Sales KPIs</h1>
+			<h1>Sales KPIs</h1>
 
 			<JnClient />
 
 			<Card className="mt-8">
-				<div className="mb-2 flex items-center justify-between">
-					<h2 className="text-lg font-semibold">Status groups</h2>
-					<div className="flex items-center gap-2">
-						<Button type="button" onClick={handleAddGroup}>
-							Add group
-						</Button>
-						<Button
-							type="button"
-							variant="secondary"
-							onClick={handleDeleteLastGroup}
-							disabled={statusGroups.length === 0}
-						>
-							Delete last group
-						</Button>
+				<h2 className="mb-2">Graph settings</h2>
+				<div>
+					<div className="mb-2 flex items-center justify-between">
+						<h3>Status groups</h3>
+						<div className="flex items-center gap-2">
+							<Button type="button" onClick={handleAddGroup}>
+								Add group
+							</Button>
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={handleDeleteLastGroup}
+								disabled={statusGroups.length === 0}
+							>
+								Delete last group
+							</Button>
+						</div>
+					</div>
+					<p className="mb-3 text-sm text-slate-600">
+						Create named groups of statuses that define the relevant transitions for jobs.
+					</p>
+
+					{statusGroups.length === 0 ? (
+						<p className="text-sm text-slate-500">
+							No groups yet. Click &quot;Add group&quot; to create your first one.
+						</p>
+					) : (
+						<div className="max-h-96 overflow-y-auto pr-1">
+							<DndContext
+								sensors={sensors}
+								collisionDetection={closestCenter}
+								onDragEnd={handleDragEnd}
+							>
+								<SortableContext
+									items={statusGroups.map((group) => group.id)}
+									strategy={verticalListSortingStrategy}
+								>
+									{statusGroups.map((group) => (
+										<StatusGroupItem
+											key={group.id}
+											group={group}
+											statusOptions={
+												availableOptionsByGroupId[group.id] ?? statusOptions
+											}
+											onNameChange={handleGroupNameChange}
+											onStatusesChange={handleGroupStatusesChange}
+										/>
+									))}
+								</SortableContext>
+							</DndContext>
+						</div>
+					)}
+				</div>
+				<div className="mt-4">
+					<h3 className="mb-2">Other graph settings</h3>
+					<div className="w-48">
+						<label className="mb-1 block text-xs font-medium text-slate-600">
+							Hide flows with fewer than <i>N</i> jobs
+						</label>
+						<Input
+							type="number"
+							size="sm"
+							value={minJobsPerFlow}
+							onChange={(e) => setMinJobsPerFlow(e.target.value)}
+							placeholder="Enter a number"
+						/>
 					</div>
 				</div>
-				<p className="mb-3 text-sm text-slate-600">
-					Create named groups of statuses that define the relevant transitions for jobs.
-				</p>
 
-				{statusGroups.length === 0 ? (
-					<p className="text-sm text-slate-500">
-						No groups yet. Click &quot;Add group&quot; to create your first one.
-					</p>
-				) : (
-					<div className="max-h-96 overflow-y-auto pr-1">
-						<DndContext
-							sensors={sensors}
-							collisionDetection={closestCenter}
-							onDragEnd={handleDragEnd}
-						>
-							<SortableContext
-								items={statusGroups.map((group) => group.id)}
-								strategy={verticalListSortingStrategy}
-							>
-								{statusGroups.map((group) => (
-									<StatusGroupItem
-										key={group.id}
-										group={group}
-										statusOptions={
-											availableOptionsByGroupId[group.id] ?? statusOptions
-										}
-										onNameChange={handleGroupNameChange}
-										onStatusesChange={handleGroupStatusesChange}
-									/>
-								))}
-							</SortableContext>
-						</DndContext>
-					</div>
-				)}
+				<Button onClick={calculateSankeyData} size="md" className="mt-4">
+					Generate Sankey Diagram
+				</Button>
 			</Card>
 
-			<Button onClick={calculateSankeyData} size="md" className="mt-4">
-				Generate Sankey Diagram
-			</Button>
 
 			<div style={{ marginTop: '2rem' }}>
 				<Plot
-					data={[{
-						type: 'sankey',
-						name: 'Job Milestone Flow',
-						orientation: 'h',
-						node: {
-							pad: 15,
-							thickness: 20,
-							line: { color: '#000', width: 0.5 },
-							label: sankeyData.nodeNames,
-						},
-						link: {
-							source: sankeyData.sourceIds,
-							target: sankeyData.targetIds,
-							value: sankeyData.jobs.map(jobs => jobs.length),
-							hovertemplate: "%{source.label} -> %{target.label}<br>Number of jobs: %{value}<br>Average duration: %{customdata:.0f} days",
-							customdata: sankeyData.averageDurationMs.map(d => d / 86400000),
-						},
-					}]}
-					layout={{
-						...sankeyLayout,
-						autosize: true,
-					}}
+					data={plotlyInputData}
+					layout={plotlyLayout}
 					useResizeHandler
 				/>
 			</div>
