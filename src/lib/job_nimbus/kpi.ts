@@ -1,5 +1,5 @@
 import Graph from "graphology";
-import type { JobStatus, JnActivity, JobBaseData } from "./domain";
+import type { JnActivity, JobBaseData } from "./domain";
 
 type StatusHistoryEntry = {
     timestamp: Date,
@@ -195,6 +195,9 @@ class JobGraphEmbedding {
         let nextId = 0;
         this.graph.forEachNode((nodeName) => {
             nodeNameToId[nodeName] = nextId++;
+            if (nodeName === null || nodeName == "null") {
+                nodeName = "Start";
+            }
             nodeNames.push(nodeName);
         });
 
