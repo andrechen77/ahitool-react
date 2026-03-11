@@ -68,7 +68,7 @@ export interface KpiSankeyData {
 }
 
 export async function generateKpiGraph(
-    statusGroups: Record<string, JobStatus[]>,
+    statusGroups: Record<string, string[]>,
     activitiesByJobJnid: { [jobJnid: string]: JnActivity[] },
     jobsByJnid: { [jobJnid: string]: JobBaseData },
 ): Promise<{ data: KpiSankeyData, invisibleJobs: string[] }> {
@@ -99,11 +99,11 @@ class JobGraphEmbedding {
     private removeCycles: boolean;
     private graph: Graph<{}, { jobJnids: string[], totalDurationMs: number }>;
 
-    constructor(statusGroups: { [statusGroup: string]: JobStatus[] }, removeCycles: boolean) {
+    constructor(statusGroups: { [statusGroup: string]: string[] }, removeCycles: boolean) {
         let statusToNode: { [statusId: string]: string } = {};
         for (const [nickname, statuses] of Object.entries(statusGroups)) {
             for (const status of statuses) {
-                statusToNode[status.name] = nickname;
+                statusToNode[status] = nickname;
             }
         }
         this.statusToNode = statusToNode;

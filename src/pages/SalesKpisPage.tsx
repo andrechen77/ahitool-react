@@ -19,7 +19,6 @@ import { CSS } from '@dnd-kit/utilities';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import JnClient from '../components/JnClient';
 import { useJobNimbusData, type JobNimbusData } from '../contexts/JobNimbusDataContext';
-import type { JobStatus } from '../lib/job_nimbus/domain';
 import { useSavedState } from '../hooks/useSavedState';
 import { Button } from '../components/ui/Button';
 import { Card } from '../components/ui/Card';
@@ -47,8 +46,8 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 			const statusGroups = JSON.parse(str) as StatusGroup[];
 			return statusGroups.map((group, index) => ({
 				id: `group-${index}`,
-				name: group.name,
-				statusIds: group.statusIds,
+				groupName: group.groupName,
+				statusNames: group.statusNames,
 			}));
 		},
 		() => []
@@ -82,10 +81,19 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 		}];
 	}, [sankeyData]);
 	const statusOptions = useMemo<StatusOption[]>(() => {
-		return Object.values(statuses).map((status) => ({
-			value: status.id,
-			label: `${status.name} (${status.id})`,
-		}));
+		let statusOptions: StatusOption[] = [];
+		let seenStatusNames = new Set<string>();
+		for (const status of Object.values(statuses)) {
+			if (seenStatusNames.has(status.name)) {
+				continue;
+			}
+			seenStatusNames.add(status.name);
+			statusOptions.push({
+				value: status.name,
+				label: `${status.name}`,
+			});
+		}
+		return statusOptions;
 	}, [statuses]);
 	const [minJobsPerFlow, setMinJobsPerFlow] = useSavedState<string>("sales-kpis:min_jobs_per_flow", String, String, () => "");
 
@@ -96,20 +104,17 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	const availableOptionsByGroupId = useMemo<Record<string, StatusOption[]>>(
 		() => {
 			const result: Record<string, StatusOption[]> = {};
-
 			statusGroups.forEach((group) => {
-				const usedStatusIds = new Set<number>();
-
+				const usedStatusNames = new Set<string>();
 				statusGroups.forEach((otherGroup) => {
 					if (otherGroup.id !== group.id) {
-						otherGroup.statusIds.forEach((id) => usedStatusIds.add(id));
+						otherGroup.statusNames.forEach(name => usedStatusNames.add(name));
 					}
 				});
-
 				result[group.id] = statusOptions.filter(
 					(option) =>
-						!usedStatusIds.has(option.value) ||
-						group.statusIds.includes(option.value),
+						!usedStatusNames.has(option.value) ||
+						group.statusNames.includes(option.value),
 				);
 			});
 
@@ -131,20 +136,20 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 			...prev,
 			{
 				id: `group-${nextGroupId}`,
-				name: `Group ${nextGroupId}`,
-				statusIds: [],
+				groupName: `Group ${nextGroupId}`,
+				statusNames: [],
 			},
 		]);
 		setNextGroupId((prev) => prev + 1);
 	};
 	const handleGroupNameChange = (id: string, name: string) => {
 		setStatusGroups((prev) =>
-			prev.map((group) => (group.id === id ? { ...group, name } : group)),
+			prev.map((group) => (group.id === id ? { ...group, groupName: name } : group)),
 		);
 	};
-	const handleGroupStatusesChange = (id: string, statusIds: number[]) => {
+	const handleGroupStatusesChange = (id: string, statusNames: string[]) => {
 		setStatusGroups((prev) =>
-			prev.map((group) => (group.id === id ? { ...group, statusIds } : group)),
+			prev.map((group) => (group.id === id ? { ...group, statusNames } : group)),
 		);
 	};
 	const handleDragEnd = (event: DragEndEvent) => {
@@ -165,9 +170,9 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 
 	const calculateSankeyData = async () => {
 		const statusGroupsObj = statusGroups.reduce((acc, group) => {
-			acc[group.name] = group.statusIds.map((id) => statuses[id]);
+			acc[group.groupName] = [...group.statusNames];
 			return acc;
-		}, {} as Record<string, JobStatus[]>);
+		}, {} as Record<string, string[]>);
 		const { data, invisibleJobs } = await generateKpiGraph(statusGroupsObj, activitiesByJobJnid, jobsByJnid);
 
 		const minJobsPerFlowVal = Number(minJobsPerFlow);
@@ -218,7 +223,7 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 				</div>
 				{statusGroups.length === 0 ? (
 					<p className="text-sm text-slate-500">
-						Defined status groups here. Click &quot;Add group&quot; to create your first one.
+						Define status groups here. Click &quot;Add group&quot; to create your first one.
 					</p>
 				) : (
 					<div className="max-h-96 overflow-y-auto pr-1">
@@ -279,12 +284,12 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 
 interface StatusGroup {
 	id: string;
-	name: string;
-	statusIds: number[];
+	groupName: string;
+	statusNames: string[];
 }
 
 interface StatusOption {
-	value: number;
+	value: string;
 	label: string;
 }
 
@@ -292,7 +297,7 @@ interface StatusGroupItemProps {
 	group: StatusGroup;
 	statusOptions: StatusOption[];
 	onNameChange: (id: string, name: string) => void;
-	onStatusesChange: (id: string, statusIds: number[]) => void;
+	onStatusesChange: (id: string, statusNames: string[]) => void;
 }
 
 function StatusGroupItem({
@@ -308,7 +313,7 @@ function StatusGroupItem({
 		transform: CSS.Transform.toString(transform),
 		transition,
 	};
-	const selectedOptions = group.statusIds.map(statusId => statusOptions.find(option => option.value === statusId) ?? { value: statusId, label: `Unknown status ${statusId}` });
+	const selectedOptions = group.statusNames.map(name => statusOptions.find(option => option.value === name) ?? { value: name, label: `Unknown status ${name}` });
 	return (
 		<div
 			ref={setNodeRef}
@@ -325,7 +330,7 @@ function StatusGroupItem({
 					<Input
 						type="text"
 						size="sm"
-						value={group.name}
+						value={group.groupName}
 						onChange={(e) => onNameChange(group.id, e.target.value)}
 						placeholder="e.g. Installed"
 					/>
