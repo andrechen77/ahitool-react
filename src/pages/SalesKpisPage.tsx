@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import Plot from 'react-plotly.js';
-import Select, { type MultiValue } from 'react-select';
+import Select, { type MultiValue, type SingleValue } from 'react-select';
 import {
 	DndContext,
 	PointerSensor,
@@ -37,7 +37,7 @@ function SalesKpisPage() {
 }
 
 function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
-	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = jnData;
+	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid, states, salesReps } = jnData;
 
 	const [statusGroups, setStatusGroups] = useSavedState<StatusGroup[]>(
 		"sales-kpis:status_groups",
@@ -96,6 +96,43 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 		return statusOptions;
 	}, [statuses]);
 	const [minJobsPerFlow, setMinJobsPerFlow] = useSavedState<string>("sales-kpis:min_jobs_per_flow", String, String, () => "");
+
+	const stateOptions = useMemo<BranchOption[]>(() => {
+		return [
+			{ value: '', label: 'All states' },
+			...states.filter(state => state !== "").map(state => ({ value: state, label: state })),
+		];
+	}, [states]);
+	const salesRepOptions = useMemo<SalesRepOption[]>(() => {
+		return salesReps.filter(salesRep => salesRep !== "").map(salesRep => ({ value: salesRep, label: salesRep }));
+	}, [salesReps]);
+
+	const [earliestCreatedDate, setEarliestCreatedDate] = useSavedState<string>(
+		"sales-kpis:filter_earliest_created_date",
+		String,
+		String,
+		() => "",
+	);
+	const [latestCreatedDate, setLatestCreatedDate] = useSavedState<string>(
+		"sales-kpis:filter_latest_created_date",
+		String,
+		String,
+		() => "",
+	);
+	const [selectedBranch, setSelectedBranch] = useSavedState<string>(
+		"sales-kpis:filter_branch",
+		String,
+		String,
+		() => stateOptions[0].value,
+	);
+	const [selectedSalesReps, setSelectedSalesReps] = useSavedState<string[]>(
+		"sales-kpis:filter_sales_reps",
+		JSON.stringify,
+		(str) => JSON.parse(str) as string[],
+		() => [],
+	);
+
+	console.log("dates", earliestCreatedDate, latestCreatedDate);
 
 	const [plotlyLayout] = useState({
 		autosize: true,
@@ -173,7 +210,26 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 			acc[group.groupName] = [...group.statusNames];
 			return acc;
 		}, {} as Record<string, string[]>);
-		const { data, invisibleJobs } = await generateKpiGraph(statusGroupsObj, activitiesByJobJnid, jobsByJnid);
+
+		const earliestCreatedDateLocal = earliestCreatedDate ? dateInputToLocalDate(earliestCreatedDate) : null;
+		const latestCreatedDateLocal = latestCreatedDate ? dateInputToLocalDate(latestCreatedDate) : null;
+		const filteredJobsByJnid = Object.fromEntries(Object.entries(jobsByJnid).filter(([_, job]) => {
+			if (selectedBranch !== "" && job.state !== selectedBranch) {
+				return false;
+			}
+			if (selectedSalesReps.length > 0 && (job.salesRep === null || !selectedSalesReps.includes(job.salesRep))) {
+				return false;
+			}
+			if (earliestCreatedDateLocal && job.createdDate < earliestCreatedDateLocal) {
+				return false;
+			}
+			if (latestCreatedDateLocal && job.createdDate > latestCreatedDateLocal) {
+				return false;
+			}
+			return true;
+		}));
+
+		const { data, invisibleJobs } = await generateKpiGraph(statusGroupsObj, activitiesByJobJnid, filteredJobsByJnid);
 
 		const minJobsPerFlowVal = Number(minJobsPerFlow);
 		for (let i = 0; i < data.jobs.length; i++) {
@@ -254,6 +310,83 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 			</div>
 
 			<div className="mt-4">
+				<h3 className="mb-2">Filter jobs</h3>
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+					<div>
+						<label className="mb-1 block text-xs font-medium text-slate-600">
+							Earliest job creation date
+						</label>
+						<Input
+							type="date"
+							size="sm"
+							value={earliestCreatedDate}
+							onChange={(e) => setEarliestCreatedDate(e.target.value)}
+						/>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs font-medium text-slate-600">
+							Latest job creation date
+						</label>
+						<Input
+							type="date"
+							size="sm"
+							value={latestCreatedDate}
+							onChange={(e) => setLatestCreatedDate(e.target.value)}
+						/>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs font-medium text-slate-600">
+							Filter by state
+						</label>
+						<Select
+							menuPortalTarget={document.body}
+							menuPosition="fixed"
+							styles={{
+								menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+							}}
+							options={stateOptions}
+							value={
+								stateOptions.find((option) => option.value === selectedBranch) ??
+								null
+							}
+							onChange={(option: SingleValue<BranchOption>) => {
+								setSelectedBranch(option?.value ?? "");
+							}}
+							classNamePrefix="branch-select"
+							placeholder="Select a state"
+						/>
+					</div>
+					<div>
+						<label className="mb-1 block text-xs font-medium text-slate-600">
+							Filter by sales rep
+						</label>
+						<Select
+							isMulti
+							menuPortalTarget={document.body}
+							menuPosition="fixed"
+							styles={{
+								menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+							}}
+							options={salesRepOptions}
+							value={selectedSalesReps.map(
+								(name) =>
+									salesRepOptions.find((option) => option.value === name) ?? {
+										value: name,
+										label: `Unknown rep ${name}`,
+									},
+							)}
+							onChange={(selected: MultiValue<SalesRepOption>) => {
+								const values = selected.map((option) => option.value);
+								setSelectedSalesReps(values);
+							}}
+							classNamePrefix="sales-rep-select"
+							placeholder="Select sales reps (empty for all)"
+						/>
+					</div>
+				</div>
+			</div>
+
+			<div className="mt-4">
 				<h3 className="mb-2">Other graph settings</h3>
 				<div className="w-48">
 					<label className="mb-1 block text-xs font-medium text-slate-600">
@@ -289,6 +422,16 @@ interface StatusGroup {
 }
 
 interface StatusOption {
+	value: string;
+	label: string;
+}
+
+interface BranchOption {
+	value: string;
+	label: string;
+}
+
+interface SalesRepOption {
 	value: string;
 	label: string;
 }
@@ -359,6 +502,11 @@ function StatusGroupItem({
 			</div>
 		</div>
 	);
+}
+
+function dateInputToLocalDate(value: string) {
+	const [y, m, d] = value.split("-").map(Number);
+	return new Date(y, m - 1, d);
 }
 
 export default SalesKpisPage;

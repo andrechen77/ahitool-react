@@ -37,13 +37,14 @@ export interface JobBaseData {
     createdDate: Date;
     milestoneDates: MilestoneDates;
     status: JobStatus;
-    statusModDate?: Date | null;
-    salesRep?: string | null;
+    statusModDate: Date | null;
+    salesRep: string | null;
     insuranceCheckbox: boolean;
-    insuranceClaimNumber?: string | null;
-    insuranceCompanyName?: string | null;
-    jobNumber?: string | null;
-    jobName?: string | null;
+    insuranceClaimNumber: string | null;
+    insuranceCompanyName: string | null;
+    jobNumber: string | null;
+    jobName: string | null;
+    state: string;
     // amount in cents
     amtReceivable: number;
 }

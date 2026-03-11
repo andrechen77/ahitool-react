@@ -9,6 +9,8 @@ export interface JobNimbusData {
 	jobsByJnid: Record<string, JobBaseData>;
 	statuses: JobStatusRegistry;
 	leadSources: JobLeadSourceRegistry;
+	states: string[];
+	salesReps: string[];
 }
 
 export const DEFAULT_JN_DATA: JobNimbusData = {
@@ -16,6 +18,8 @@ export const DEFAULT_JN_DATA: JobNimbusData = {
 	jobsByJnid: {},
 	statuses: {},
 	leadSources: {},
+	states: [],
+	salesReps: [],
 };
 
 interface JobNimbusDataContextType {
@@ -89,6 +93,19 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 				...(prev ?? DEFAULT_JN_DATA),
 				activitiesByJobJnid: activitiesByJnid,
 			}));
+
+			const states = Array.from(new Set(jobs.map(job => job.state)));
+			setData(prev => ({
+				...(prev ?? DEFAULT_JN_DATA),
+				states: states,
+			}));
+
+			const salesReps = Array.from(new Set(jobs.map(job => job.salesRep).filter(rep => rep !== null)));
+			setData(prev => ({
+				...(prev ?? DEFAULT_JN_DATA),
+				salesReps: salesReps,
+			}));
+
 		} finally {
 			setIsLoading(false);
 		}

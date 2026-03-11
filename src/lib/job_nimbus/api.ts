@@ -348,6 +348,7 @@ function parseJnActivity(
 const RAW_JOB_BASE_DATA_KEYS = {
     JNID: "jnid",
     STATUS: "status",
+    STATE: "state_text",
     DATE_CREATED: "date_created",
     DATE_STATUS_CHANGE: "date_status_change",
     SALES_REP_NAME: "sales_rep_name",
@@ -410,6 +411,11 @@ export function parseJobBaseData(
     // get the last status update
     const statusModDate = getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.DATE_STATUS_CHANGE);
 
+    const state = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.STATE) ?? "";
+    if (state === "") {
+        console.warn(`Missing or invalid state field for job ${jnid}`);
+    }
+
     // optional fields
     const salesRep = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.SALES_REP_NAME);
     const insuranceCheckbox = Boolean(raw[RAW_JOB_BASE_DATA_KEYS.INSURANCE_CHECKBOX]);
@@ -438,6 +444,7 @@ export function parseJobBaseData(
     return {
         jnid,
         createdDate,
+        state,
         milestoneDates,
         status,
         statusModDate,
