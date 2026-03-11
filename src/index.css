@@ -27,6 +27,21 @@
 }
 
 @layer components {
+  .pop-button {
+    animation: pop 1.2s infinite ease-in-out;
+  }
+
+  @keyframes pop {
+
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.5);
+    }
+  }
 
   /* headings */
   h1 {
@@ -56,6 +71,10 @@
 
   .btn-ghost {
     @apply text-slate-600 hover:bg-slate-200;
+  }
+
+  .btn-error {
+    @apply border border-red-500 text-red-500 shadow-sm hover:bg-red-500 active:bg-red-400 hover:text-white active:text-white;
   }
 
   .btn-icon {

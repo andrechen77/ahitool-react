@@ -39,6 +39,28 @@ export async function jnCacheLoadOrCalculate<T>(
     return value;
 }
 
+export async function* jnCacheLoadOrCalculateStream<T>(
+    key: string,
+    calculate: () => AsyncGenerator<T>,
+): AsyncGenerator<T> {
+    let results: T[] = [];
+
+    const cached = await jnCacheLoad(key);
+    if (cached !== undefined) {
+        // get the cached values
+        results = cached as T[];
+        yield* results;
+    } else {
+        // calculate the values
+        for await (const value of calculate()) {
+            results.push(value);
+            yield value;
+        }
+        await jnCacheStore(key, results);
+    }
+
+}
+
 async function jnCacheLoad<T>(key: string): Promise<T | undefined> {
     const db = await getJnDb();
     const tx = db.transaction(STORE_NAME_CACHE, "readonly");

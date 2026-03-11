@@ -1,7 +1,7 @@
 import type React from 'react';
 import { cn } from '../../util/cn';
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+type ButtonVariant = 'primary' | 'secondary' | 'error' | 'ghost';
 type ButtonSize = 'sm' | 'md';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -13,6 +13,7 @@ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElemen
 const variantClassNames: Record<ButtonVariant, string> = {
 	primary: 'btn btn-primary',
 	secondary: 'btn btn-secondary',
+	error: 'btn btn-error',
 	ghost: 'btn btn-ghost',
 };
 
@@ -35,6 +36,7 @@ export function Button({
 				variantClassNames[variant],
 				sizeClassNames[size],
 				icon && 'btn-icon',
+				'cursor-pointer',
 				className,
 			)}
 			{...props}

@@ -1,28 +1,22 @@
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { FaEye, FaEyeSlash } from 'react-icons/fa';
-import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
+import { useApiKey } from '../contexts/ApiKeyModalContext';
 import { Input } from './ui/Input';
 import { Button } from './ui/Button';
 
 type FormOnSubmit = React.ComponentPropsWithoutRef<'form'>['onSubmit'];
 
 export function ApiKeyModal() {
-	const { isOpen, message, closeModal } = useApiKeyModal();
-	const [apiKey, setApiKey] = useState('');
+	const { isOpen, message, closeModal, apiKey, setApiKey } = useApiKey();
 	const [textType, setTextType] = useState<'password' | 'text'>('password');
-
-	useEffect(() => {
-		setApiKey(localStorage.getItem('job_nimbus_api_key') ?? '');
-	}, [isOpen]);
 
 	const handleApiKeySubmit: FormOnSubmit = (e) => {
 		e.preventDefault()
 		if (apiKey.trim()) {
-			localStorage.setItem('job_nimbus_api_key', apiKey.trim())
-			setApiKey('')
-			closeModal()
+			setApiKey(apiKey.trim())
 		}
+		closeModal()
 	};
 
 	const handleOverlayClick = () => {
@@ -40,9 +34,8 @@ export function ApiKeyModal() {
 					JobNimbus API Key
 				</h2>
 				<p className="mb-6 text-sm text-slate-600">
-					A JobNimbus API key is required to access JobNimbus data.
+					{message}
 				</p>
-				{message && <p className="mb-6 text-sm text-slate-600">{message}</p>}
 				<form onSubmit={handleApiKeySubmit}>
 					<div className="relative mb-6">
 						<Input

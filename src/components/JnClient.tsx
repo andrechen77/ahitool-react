@@ -1,104 +1,120 @@
 import { useState, useEffect } from 'react';
 import { FaSyncAlt } from 'react-icons/fa';
 import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
-import { useApiKeyModal } from '../contexts/ApiKeyModalContext';
+import { useApiKey } from '../contexts/ApiKeyModalContext';
 import { Button } from './ui/Button';
 import { Card } from './ui/Card';
 import { cn } from '../util/cn';
 import { ApiKeyError } from '../lib/job_nimbus/api';
 
-type Tab = 'overview' | 'statuses' | 'leadSources' | 'jobs';
+type Tab = 'apiKey' | 'overview' | 'statuses' | 'leadSources' | 'jobs';
 
 function JnClient() {
 	const {
-		activitiesByJobJnid,
-		jobsByJnid,
-		statuses,
-		leadSources,
+		data: jnData,
 		isLoading,
 		refresh,
 	} = useJobNimbusData();
 
-	const { openModal } = useApiKeyModal();
+	const statuses = jnData?.statuses ?? {};
+	const leadSources = jnData?.leadSources ?? {};
+	const jobsByJnid = jnData?.jobsByJnid ?? {};
+	const activitiesByJobJnid = jnData?.activitiesByJobJnid ?? {};
+
+	const { apiKey, openModal } = useApiKey();
 	const [activeTab, setActiveTab] = useState<Tab>('overview');
 	const [jobJnidQuery, setJobJnidQuery] = useState('');
 
 	useEffect(() => {
-		refresh(false);
+		refresh(null).catch(error => {
+			if (error instanceof ApiKeyError) {
+				// we expect and ignore this since we pass null as the API key,
+				// preventing a fetch
+
+				// except if the user hasn't entered an API key yet, then nudge
+				// them
+				if (apiKey === "") {
+					openModal("Enter an API key to access JobNimbus data.");
+					setActiveTab('apiKey');
+				}
+			} else {
+				throw error;
+			}
+		});
 	}, []);
 
 	const statusesArray = Object.values(statuses);
-	const leadSourcesArray = Object.values(leadSources);
+	const leadSourcesArray = Object.values(statuses);
 
 	const handleRefresh = async () => {
 		try {
-			await refresh(true);
+			await refresh(apiKey);
 		} catch (error) {
 			if (error instanceof ApiKeyError) {
-				openModal("Invalid API key");
+				openModal("Invalid API key. Make sure you entered the key correctly.");
 			} else {
 				throw error;
 			}
 		}
-	}
+		setActiveTab('overview');
+	};
+
+	const suggestRefresh = apiKey.length > 0 && jnData === null && !isLoading;
 
 	return (
 		<Card className="my-2">
 			<div className="flex items-center gap-2 mb-4">
 				<h2>JobNimbus Data</h2>
-				<Button
-					onClick={handleRefresh}
-					variant="ghost"
-					icon
-					disabled={isLoading}
-					title="Refresh data"
-				>
-					<FaSyncAlt className={isLoading ? 'animate-spin' : ''} />
-				</Button>
+				<div className="flex items-center gap-2">
+					<Button
+						onClick={handleRefresh}
+						variant="ghost"
+						className={suggestRefresh ? 'pop-button' : ''}
+						icon
+						disabled={isLoading}
+						title="Refresh data"
+					>
+						<FaSyncAlt className={isLoading ? 'animate-spin' : ''} />
+					</Button>
+					{suggestRefresh ? (
+						<p className="text-sm text-slate-500">Refresh data</p>
+					) : isLoading ? (
+						<p className="text-sm text-slate-500">Loading data. This may take a minute...</p>
+					) : jnData !== null ? (
+						<p className="text-sm text-slate-500">Data loaded</p>
+					) : null}
+				</div>
 			</div>
 
 			<div className="border-b border-slate-300 mb-4">
 				<div className="tabs">
-					<button
-						onClick={() => setActiveTab('overview')}
-						className={cn(
-							'tab',
-							activeTab === 'overview' ? 'tab-active' : 'tab-inactive',
-						)}
-					>
+					<TabButton tab="apiKey" activeTab={activeTab} setActiveTab={setActiveTab}>
+						API Key
+					</TabButton>
+					<TabButton tab="overview" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Overview
-					</button>
-					<button
-						onClick={() => setActiveTab('statuses')}
-						className={cn(
-							'tab',
-							activeTab === 'statuses' ? 'tab-active' : 'tab-inactive',
-						)}
-					>
+					</TabButton>
+					<TabButton tab="statuses" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Statuses
-					</button>
-					<button
-						onClick={() => setActiveTab('leadSources')}
-						className={cn(
-							'tab',
-							activeTab === 'leadSources' ? 'tab-active' : 'tab-inactive',
-						)}
-					>
+					</TabButton>
+					<TabButton tab="leadSources" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Lead Sources
-					</button>
-					<button
-						onClick={() => setActiveTab('jobs')}
-						className={cn(
-							'tab',
-							activeTab === 'jobs' ? 'tab-active' : 'tab-inactive',
-						)}
-					>
+					</TabButton>
+					<TabButton tab="jobs" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Jobs
-					</button>
+					</TabButton>
 				</div>
 			</div>
 
 			{isLoading && <p>Loading JobNimbus data...</p>}
+
+			{activeTab === 'apiKey' && (
+				<div>
+					<Button type="button" variant={apiKey === "" ? "error" : "secondary"} onClick={() => openModal("Enter your JobNimbus API key here")}>
+						Update API Key
+					</Button>
+				</div>
+			)}
 
 			{activeTab === 'overview' && (
 				<div>
@@ -114,9 +130,6 @@ function JnClient() {
 					<p>
 						<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
 					</p>
-					<Button type="button" variant="secondary" onClick={() => openModal(null)}>
-						Update API Key
-					</Button>
 				</div>
 			)}
 
@@ -203,6 +216,20 @@ function JnClient() {
 				</div>
 			)}
 		</Card>
+	);
+}
+
+function TabButton({ tab, activeTab, setActiveTab, children }: { tab: Tab, activeTab: Tab, setActiveTab: (tab: Tab) => void, children: React.ReactNode }) {
+	return (
+		<button
+			onClick={() => setActiveTab(tab)}
+			className={cn(
+				'cursor-pointer tab',
+				activeTab === tab ? 'tab-active' : 'tab-inactive',
+			)}
+		>
+			{children}
+		</button>
 	);
 }
 

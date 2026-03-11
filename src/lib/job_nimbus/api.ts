@@ -1,7 +1,7 @@
 // functions for interacting with the JobNimbus API and parsing the responses
 
 import { assertArray, assertObject } from "../types";
-import { jnCacheLoadOrCalculate } from "./indexed_db";
+import { jnCacheLoadOrCalculate, jnCacheLoadOrCalculateStream } from "./indexed_db";
 import { JobMilestone } from "./domain";
 import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
@@ -21,21 +21,26 @@ export class ApiKeyError extends Error {
 
 // always makes a fetch request
 export async function requestFromJobNimbus(
+    apiKey: string | null,
     endpoint: string,
     // headers: Record<string, string>,
     params: Record<string, string>
 ): Promise<Response> {
+    if (apiKey === null) {
+        throw new ApiKeyError('An API key is required to access JobNimbus data', null);
+    }
+
     // calculate the url
     const queryString = params && Object.keys(params).length > 0
         ? '?' + new URLSearchParams(params).toString()
         : '';
     const url = `${API_BASE}/api/jobnimbus/api1/${endpoint}${queryString}`;
 
-    // get the api key
-    const token = localStorage.getItem('job_nimbus_api_key');
-    if (!token) {
-        throw new ApiKeyError('No JobNimbus API key found', null);
-    }
+    // // get the api key
+    // const token = localStorage.getItem('job_nimbus_api_key');
+    // if (!token) {
+    //     throw new ApiKeyError('No JobNimbus API key found', null);
+    // }
 
     // fetch the data
     console.log(`fetching ${url} with params ${JSON.stringify(params)}`);
@@ -43,7 +48,7 @@ export async function requestFromJobNimbus(
         url,
         {
             headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${apiKey}`,
                 // ...headers,
             },
         }
@@ -52,30 +57,22 @@ export async function requestFromJobNimbus(
         console.log(`response for ${url} complete: ${response.status} ${response.statusText}`);
         return response;
     } else if (response.status === 401) {
-        throw new ApiKeyError('Invalid JobNimbus API key', token);
+        throw new ApiKeyError('Invalid JobNimbus API key', apiKey);
     } else {
         throw new Error(`Unexpected response from JobNimbus: ${response.status} ${response.statusText}`);
     }
 }
 
 // gets the contents of https://app.jobnimbus.com/api1/account/settings,
-// possibly cached. returns undefined if there are no settings but fetch is not
-// allowed
-async function getSettings(allowFetch: boolean): Promise<unknown> {
+// possibly cached.
+async function getSettings(apiKey: string | null): Promise<unknown> {
     return await jnCacheLoadOrCalculate("settings", async () => {
-        if (allowFetch) {
-            return await requestFromJobNimbus("account/settings", {}).then(r => r.json());
-        } else {
-            return undefined;
-        }
+        return await requestFromJobNimbus(apiKey, "account/settings", {}).then(r => r.json());
     });
 }
 
-export async function getJobStatuses(allowFetch: boolean): Promise<JobStatusRegistry> {
-    const settings = await getSettings(allowFetch);
-    if (typeof settings === "undefined") {
-        return {};
-    }
+export async function getJobStatuses(apiKey: string | null): Promise<JobStatusRegistry> {
+    const settings = await getSettings(apiKey);
     assertObject(settings);
 
     const allWorkflows = settings["workflows"];
@@ -96,11 +93,8 @@ export async function getJobStatuses(allowFetch: boolean): Promise<JobStatusRegi
     return statuses;
 }
 
-export async function getLeadSources(allowFetch: boolean): Promise<JobLeadSourceRegistry> {
-    const settings = await getSettings(allowFetch);
-    if (typeof settings === "undefined") {
-        return {};
-    }
+export async function getLeadSources(apiKey: string | null): Promise<JobLeadSourceRegistry> {
+    const settings = await getSettings(apiKey);
     assertObject(settings);
     assertArray(settings["sources"]);
 
@@ -116,7 +110,7 @@ export async function getLeadSources(allowFetch: boolean): Promise<JobLeadSource
 }
 
 // repeatedly make requests from JobNimbus until all items are fetched
-async function getAllFromJobNimbus(endpoint: string, params: Record<string, string>, resultKey: string): Promise<unknown[]> {
+async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, params: Record<string, string>, resultKey: string): Promise<unknown[]> {
     const maxPerPage = 1000;
 
     let results: unknown[] = [];
@@ -124,7 +118,7 @@ async function getAllFromJobNimbus(endpoint: string, params: Record<string, stri
     do {
         params["size"] = String(maxPerPage);
         params["from"] = String(results.length);
-        const response: unknown = await requestFromJobNimbus(endpoint, params).then(r => r.json());
+        const response: unknown = await requestFromJobNimbus(apiKey, endpoint, params).then(r => r.json());
         assertObject(response);
 
         newResults = response[resultKey] as unknown[];
@@ -135,7 +129,7 @@ async function getAllFromJobNimbus(endpoint: string, params: Record<string, stri
     return results;
 }
 
-async function* getAllJobActivitiesUnparsedGenerator(): AsyncGenerator<unknown> {
+async function* getAllJobActivitiesUnparsedGenerator(apiKey: string | null): AsyncGenerator<unknown> {
     const endpoint = "activities";
     const resultKey = "activity";
     const maxPerRequest = 1000;
@@ -169,7 +163,7 @@ async function* getAllJobActivitiesUnparsedGenerator(): AsyncGenerator<unknown> 
                 ]
             }),
         };
-        const response: unknown = await requestFromJobNimbus(endpoint, params).then(r => r.json());
+        const response: unknown = await requestFromJobNimbus(apiKey, endpoint, params).then(r => r.json());
         assertObject(response);
         const newResults = response[resultKey];
         assertArray(newResults);
@@ -200,39 +194,29 @@ async function* getAllJobActivitiesUnparsedGenerator(): AsyncGenerator<unknown> 
     } while (numRequests < 100 && lastNumRetrieved >= maxPerRequest);
 }
 
-export async function getAllJobActivitiesUnparsed(allowFetch: boolean): Promise<unknown[]> {
-    return await jnCacheLoadOrCalculate("activities", async () => {
-        if (allowFetch) {
-            let results: unknown[] = [];
-            for await (const activity of getAllJobActivitiesUnparsedGenerator()) {
-                results.push(activity);
-            }
-            return results;
-        } else {
-            return [];
-        }
+export async function* getAllJobActivitiesUnparsed(apiKey: string | null): AsyncGenerator<unknown> {
+    yield* jnCacheLoadOrCalculateStream("activities", async function* () {
+        yield* getAllJobActivitiesUnparsedGenerator(apiKey);
     });
 }
 
-export async function getAllJobActivities(allowFetch: boolean): Promise<JnActivity[]> {
-    const activities = await getAllJobActivitiesUnparsed(allowFetch);
-    const statuses = await getJobStatuses(allowFetch);
-    return activities.map(activity => parseJnActivity(activity, statuses));
+export async function* getAllJobActivities(apiKey: string | null): AsyncGenerator<JnActivity> {
+    const statuses = await getJobStatuses(apiKey);
+    for await (const activity of getAllJobActivitiesUnparsed(apiKey)) {
+        yield parseJnActivity(activity, statuses);
+    }
 }
 
-export async function getAllJobBaseData(allowFetch: boolean): Promise<JobBaseData[]> {
+export async function getAllJobBaseData(apiKey: string | null): Promise<JobBaseData[]> {
     const data = await jnCacheLoadOrCalculate("base_data", async () => {
-        if (allowFetch) {
-            return await getAllFromJobNimbus(
-                "jobs",
-                {},
-                "results",
-            );
-        } else {
-            return [];
-        }
+        return await getAllFromJobNimbus(
+            apiKey,
+            "jobs",
+            {},
+            "results",
+        );
     });
-    const statuses = await getJobStatuses(allowFetch);
+    const statuses = await getJobStatuses(apiKey);
     return data.map(job => parseJobBaseData(job, statuses));
 }
 

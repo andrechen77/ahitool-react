@@ -18,7 +18,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import JnClient from '../components/JnClient';
-import { useJobNimbusData } from '../contexts/JobNimbusDataContext';
+import { useJobNimbusData, type JobNimbusData } from '../contexts/JobNimbusDataContext';
 import type { JobStatus } from '../lib/job_nimbus/domain';
 import { useSavedState } from '../hooks/useSavedState';
 import { Button } from '../components/ui/Button';
@@ -26,7 +26,19 @@ import { Card } from '../components/ui/Card';
 import { Input } from '../components/ui/Input';
 
 function SalesKpisPage() {
-	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = useJobNimbusData();
+	const { data: jnData } = useJobNimbusData();
+
+	return (
+		<section>
+			<h1>Sales KPIs</h1>
+			<JnClient />
+			{jnData && <SalesKpisContent jnData={jnData} />}
+		</section>
+	);
+}
+
+function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
+	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid } = jnData;
 
 	const [statusGroups, setStatusGroups] = useSavedState<StatusGroup[]>(
 		"sales-kpis:status_groups",
@@ -177,96 +189,90 @@ function SalesKpisPage() {
 	};
 
 	return (
-		<section>
-			<h1>Sales KPIs</h1>
+		<Card className="mt-8">
+			<h2 className="mb-2">Job Flows</h2>
 
-			<JnClient />
+			<Plot
+				data={plotlyInputData}
+				layout={plotlyLayout}
+				useResizeHandler
+			/>
 
-			<Card className="mt-8">
-				<h2 className="mb-2">Job Flows</h2>
+			<Button onClick={calculateSankeyData} size="md" className="mt-4">
+				Generate Sankey Diagram
+			</Button>
 
-				<Plot
-					data={plotlyInputData}
-					layout={plotlyLayout}
-					useResizeHandler
-				/>
+			<hr className="my-6" />
 
-				<Button onClick={calculateSankeyData} size="md" className="mt-4">
-					Generate Sankey Diagram
-				</Button>
-
-				<hr className="my-6" />
-
-				<div>
-					<div className="mb-2 flex items-center justify-between">
-						<h3>Status groups</h3>
-						<div className="flex items-center gap-2">
-							<Button type="button" onClick={handleAddGroup}>
-								Add group
-							</Button>
-							<Button
-								type="button"
-								variant="secondary"
-								onClick={handleDeleteLastGroup}
-								disabled={statusGroups.length === 0}
-							>
-								Delete last group
-							</Button>
-						</div>
+			<div>
+				<div className="mb-2 flex items-center justify-between">
+					<h3>Status groups</h3>
+					<div className="flex items-center gap-2">
+						<Button type="button" onClick={handleAddGroup}>
+							Add group
+						</Button>
+						<Button
+							type="button"
+							variant="secondary"
+							onClick={handleDeleteLastGroup}
+							disabled={statusGroups.length === 0}
+						>
+							Delete last group
+						</Button>
 					</div>
-					<p className="mb-3 text-sm text-slate-600">
-						Create named groups of statuses that define the relevant transitions for jobs.
+				</div>
+				<p className="mb-3 text-sm text-slate-600">
+					Create named groups of statuses that define the relevant transitions for jobs.
+				</p>
+
+				{statusGroups.length === 0 ? (
+					<p className="text-sm text-slate-500">
+						No groups yet. Click &quot;Add group&quot; to create your first one.
 					</p>
-
-					{statusGroups.length === 0 ? (
-						<p className="text-sm text-slate-500">
-							No groups yet. Click &quot;Add group&quot; to create your first one.
-						</p>
-					) : (
-						<div className="max-h-96 overflow-y-auto pr-1">
-							<DndContext
-								sensors={sensors}
-								collisionDetection={closestCenter}
-								onDragEnd={handleDragEnd}
+				) : (
+					<div className="max-h-96 overflow-y-auto pr-1">
+						<DndContext
+							sensors={sensors}
+							collisionDetection={closestCenter}
+							onDragEnd={handleDragEnd}
+						>
+							<SortableContext
+								items={statusGroups.map((group) => group.id)}
+								strategy={verticalListSortingStrategy}
 							>
-								<SortableContext
-									items={statusGroups.map((group) => group.id)}
-									strategy={verticalListSortingStrategy}
-								>
-									{statusGroups.map((group) => (
-										<StatusGroupItem
-											key={group.id}
-											group={group}
-											statusOptions={
-												availableOptionsByGroupId[group.id] ?? statusOptions
-											}
-											onNameChange={handleGroupNameChange}
-											onStatusesChange={handleGroupStatusesChange}
-										/>
-									))}
-								</SortableContext>
-							</DndContext>
-						</div>
-					)}
-				</div>
-
-				<div className="mt-4">
-					<h3 className="mb-2">Other graph settings</h3>
-					<div className="w-48">
-						<label className="mb-1 block text-xs font-medium text-slate-600">
-							Hide flows with fewer than <i>N</i> jobs
-						</label>
-						<Input
-							type="number"
-							size="sm"
-							value={minJobsPerFlow}
-							onChange={(e) => setMinJobsPerFlow(e.target.value)}
-							placeholder="Enter a number"
-						/>
+								{statusGroups.map((group) => (
+									<StatusGroupItem
+										key={group.id}
+										group={group}
+										statusOptions={
+											availableOptionsByGroupId[group.id] ?? statusOptions
+										}
+										onNameChange={handleGroupNameChange}
+										onStatusesChange={handleGroupStatusesChange}
+									/>
+								))}
+							</SortableContext>
+						</DndContext>
 					</div>
+				)}
+			</div>
+
+			<div className="mt-4">
+				<h3 className="mb-2">Other graph settings</h3>
+				<div className="w-48">
+					<label className="mb-1 block text-xs font-medium text-slate-600">
+						Hide flows with fewer than <i>N</i> jobs
+					</label>
+					<Input
+						type="number"
+						size="sm"
+						value={minJobsPerFlow}
+						onChange={(e) => setMinJobsPerFlow(e.target.value)}
+						placeholder="Enter a number"
+					/>
 				</div>
-			</Card>
-		</section>
+			</div>
+		</Card>
 	);
 }
 

@@ -1,29 +1,40 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 
 interface ApiKeyModalContextType {
 	isOpen: boolean,
-	message: string | null,
-	openModal: (message: string | null) => void,
+	message: string,
+	openModal: (message: string) => void,
 	closeModal: () => void,
+	apiKey: string,
+	setApiKey: (apiKey: string) => void,
 }
 
 const ApiKeyModalContext = createContext<ApiKeyModalContextType | undefined>(undefined);
 
 export function ApiKeyModalProvider({ children }: { children: ReactNode }) {
+	const [apiKey, setApiKey] = useState<string>(() => {
+		return localStorage.getItem('job_nimbus_api_key') ?? "";
+	});
 	const [isOpen, setIsOpen] = useState(false);
-	const [message, setMessage] = useState<string | null>(null);
+	const [message, setMessage] = useState<string>("Enter your JobNimbus API key here");
+
+	useEffect(() => {
+		localStorage.setItem('job_nimbus_api_key', apiKey);
+	}, [apiKey]);
+
 	const value = {
 		isOpen,
 		message,
-		openModal: (message: string | null) => {
+		openModal: (message: string) => {
 			setIsOpen(true);
 			setMessage(message);
 		},
 		closeModal: () => {
 			setIsOpen(false);
-			setMessage(null);
 		},
+		apiKey,
+		setApiKey,
 	};
 
 	return (
@@ -33,7 +44,7 @@ export function ApiKeyModalProvider({ children }: { children: ReactNode }) {
 	);
 }
 
-export function useApiKeyModal(): ApiKeyModalContextType {
+export function useApiKey(): ApiKeyModalContextType {
 	const context = useContext(ApiKeyModalContext);
 	if (context === undefined)
 		throw new Error('useApiKeyModal must be used within an ApiKeyModalProvider');
