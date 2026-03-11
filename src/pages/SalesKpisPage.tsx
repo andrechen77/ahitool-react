@@ -192,17 +192,12 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 		<Card className="mt-8">
 			<h2 className="mb-2">Job Flows</h2>
 
-			<Plot
-				data={plotlyInputData}
-				layout={plotlyLayout}
-				useResizeHandler
-			/>
-
-			<Button onClick={calculateSankeyData} size="md" className="mt-4">
-				Generate Sankey Diagram
-			</Button>
-
-			<hr className="my-6" />
+			<p className="mb-3 text-sm text-slate-600">
+				This tool lets you generate a Sankey diagram that track the
+				flow of jobs between predefined "status groups." For example,
+				defining a "leads" status group and an "appointments" status
+				group lets you figure out how many leads turn into appointments.
+			</p>
 
 			<div>
 				<div className="mb-2 flex items-center justify-between">
@@ -221,13 +216,9 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 						</Button>
 					</div>
 				</div>
-				<p className="mb-3 text-sm text-slate-600">
-					Create named groups of statuses that define the relevant transitions for jobs.
-				</p>
-
 				{statusGroups.length === 0 ? (
 					<p className="text-sm text-slate-500">
-						No groups yet. Click &quot;Add group&quot; to create your first one.
+						Defined status groups here. Click &quot;Add group&quot; to create your first one.
 					</p>
 				) : (
 					<div className="max-h-96 overflow-y-auto pr-1">
@@ -272,6 +263,16 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 					/>
 				</div>
 			</div>
+
+			<Button onClick={calculateSankeyData} size="md" className="mt-4">
+				Generate Sankey Diagram
+			</Button>
+
+			<Plot
+				data={plotlyInputData}
+				layout={plotlyLayout}
+				useResizeHandler
+			/>
 		</Card>
 	);
 }

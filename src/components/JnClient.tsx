@@ -44,7 +44,7 @@ function JnClient() {
 	}, []);
 
 	const statusesArray = Object.values(statuses);
-	const leadSourcesArray = Object.values(statuses);
+	const leadSourcesArray = Object.values(leadSources);
 
 	const handleRefresh = async () => {
 		try {
