@@ -37,7 +37,7 @@ function SalesKpisPage() {
 }
 
 function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
-	const { statuses, leadSources: _, activitiesByJobJnid, jobsByJnid, states, salesReps } = jnData;
+	const { statuses, leadSources, activitiesByJobJnid, jobsByJnid, states, salesReps } = jnData;
 
 	const [statusGroups, setStatusGroups] = useSavedState<StatusGroup[]>(
 		"sales-kpis:status_groups",
@@ -106,6 +106,9 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	const salesRepOptions = useMemo<SalesRepOption[]>(() => {
 		return salesReps.filter(salesRep => salesRep !== "").map(salesRep => ({ value: salesRep, label: salesRep }));
 	}, [salesReps]);
+	const leadSourceOptions = useMemo<LeadSourceOption[]>(() => {
+		return Object.values(leadSources).map(leadSource => ({ value: leadSource.name, label: leadSource.name }));
+	}, [leadSources]);
 
 	const [earliestCreatedDate, setEarliestCreatedDate] = useSavedState<string>(
 		"sales-kpis:filter_earliest_created_date",
@@ -127,6 +130,12 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	);
 	const [selectedSalesReps, setSelectedSalesReps] = useSavedState<string[]>(
 		"sales-kpis:filter_sales_reps",
+		JSON.stringify,
+		(str) => JSON.parse(str) as string[],
+		() => [],
+	);
+	const [selectedLeadSources, setSelectedLeadSources] = useSavedState<string[]>(
+		"sales-kpis:filter_lead_sources",
 		JSON.stringify,
 		(str) => JSON.parse(str) as string[],
 		() => [],
@@ -214,16 +223,19 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 		const earliestCreatedDateLocal = earliestCreatedDate ? dateInputToLocalDate(earliestCreatedDate) : null;
 		const latestCreatedDateLocal = latestCreatedDate ? dateInputToLocalDate(latestCreatedDate) : null;
 		const filteredJobsByJnid = Object.fromEntries(Object.entries(jobsByJnid).filter(([_, job]) => {
+			if (earliestCreatedDateLocal && job.createdDate < earliestCreatedDateLocal) {
+				return false;
+			}
+			if (latestCreatedDateLocal && job.createdDate > latestCreatedDateLocal) {
+				return false;
+			}
 			if (selectedBranch !== "" && job.state !== selectedBranch) {
 				return false;
 			}
 			if (selectedSalesReps.length > 0 && (job.salesRep === null || !selectedSalesReps.includes(job.salesRep))) {
 				return false;
 			}
-			if (earliestCreatedDateLocal && job.createdDate < earliestCreatedDateLocal) {
-				return false;
-			}
-			if (latestCreatedDateLocal && job.createdDate > latestCreatedDateLocal) {
+			if (selectedLeadSources.length > 0 && (job.leadSourceName === null || !selectedLeadSources.includes(job.leadSourceName))) {
 				return false;
 			}
 			return true;
@@ -380,8 +392,33 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 									const values = selected.map((option) => option.value);
 									setSelectedSalesReps(values);
 								}}
-								classNamePrefix="sales-rep-select"
 								placeholder="Select sales reps (empty for all)"
+							/>
+						</div>
+						<div>
+							<label className="mb-1 block text-xs font-medium text-slate-600">
+								Filter by lead source
+							</label>
+							<Select
+								isMulti
+								menuPortalTarget={document.body}
+								menuPosition="fixed"
+								styles={{
+									menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+								}}
+								options={leadSourceOptions}
+								value={selectedLeadSources.map(
+									(name) =>
+										leadSourceOptions.find((option) => option.value === name) ?? {
+											value: name,
+											label: `Unknown lead source ${name}`,
+										},
+								)}
+								onChange={(selected: MultiValue<LeadSourceOption>) => {
+									const values = selected.map((option) => option.value);
+									setSelectedLeadSources(values);
+								}}
+								placeholder="Select lead sources (empty for all)"
 							/>
 						</div>
 					</div>
@@ -438,6 +475,11 @@ interface BranchOption {
 }
 
 interface SalesRepOption {
+	value: string;
+	label: string;
+}
+
+interface LeadSourceOption {
 	value: string;
 	label: string;
 }

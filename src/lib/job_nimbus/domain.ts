@@ -45,6 +45,7 @@ export interface JobBaseData {
     jobNumber: string | null;
     jobName: string | null;
     state: string;
+    leadSourceName: string | null;
     // amount in cents
     amtReceivable: number;
 }

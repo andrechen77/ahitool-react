@@ -363,6 +363,7 @@ const RAW_JOB_BASE_DATA_KEYS = {
     CONTRACT_DATE: "Signed Contract Date",
     INSTALL_DATE: "Install Date",
     LOSS_DATE: "Job Lost Date (Lost Status)",
+    LEAD_SOURCE_NAME: "source_name",
 }
 
 export function parseJobBaseData(
@@ -423,6 +424,7 @@ export function parseJobBaseData(
     const insuranceClaimNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_CLAIM_NUMBER);
     const jobNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NUMBER);
     const jobName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NAME);
+    const leadSourceName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.LEAD_SOURCE_NAME);
 
     // get the amount receivable
     let amtReceivable = 0;
@@ -454,6 +456,7 @@ export function parseJobBaseData(
         insuranceCompanyName,
         jobNumber,
         jobName,
+        leadSourceName,
         amtReceivable,
     };
 }
