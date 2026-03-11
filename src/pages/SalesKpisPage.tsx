@@ -250,168 +250,174 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	};
 
 	return (
-		<Card className="mt-8">
-			<h2 className="mb-2">Job Flows</h2>
+		<>
+			<Card className="mt-8">
+				<h2 className="mb-2">Job Flows</h2>
 
-			<p className="mb-3 text-sm text-slate-600">
-				This tool lets you generate a Sankey diagram that track the
-				flow of jobs between predefined "status groups." For example,
-				defining a "leads" status group and an "appointments" status
-				group lets you figure out how many leads turn into appointments.
-			</p>
+				<p className="mb-3 text-sm text-slate-600">
+					This tool lets you track the
+					flow of jobs between predefined "status groups." For example,
+					defining a "leads" status group and an "appointments" status
+					group lets you figure out how many leads turn into appointments.
+				</p>
 
-			<div>
-				<div className="mb-2 flex items-center justify-between">
-					<h3>Status groups</h3>
-					<div className="flex items-center gap-2">
-						<Button type="button" onClick={handleAddGroup}>
-							Add group
-						</Button>
-						<Button
-							type="button"
-							variant="secondary"
-							onClick={handleDeleteLastGroup}
-							disabled={statusGroups.length === 0}
-						>
-							Delete last group
-						</Button>
-					</div>
-				</div>
-				{statusGroups.length === 0 ? (
-					<p className="text-sm text-slate-500">
-						Define status groups here. Click &quot;Add group&quot; to create your first one.
-					</p>
-				) : (
-					<div className="max-h-96 overflow-y-auto pr-1">
-						<DndContext
-							sensors={sensors}
-							collisionDetection={closestCenter}
-							onDragEnd={handleDragEnd}
-						>
-							<SortableContext
-								items={statusGroups.map((group) => group.id)}
-								strategy={verticalListSortingStrategy}
+				<div>
+					<div className="mb-2 flex items-center justify-between">
+						<h3>Status groups</h3>
+						<div className="flex items-center gap-2">
+							<Button type="button" onClick={handleAddGroup}>
+								Add group
+							</Button>
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={handleDeleteLastGroup}
+								disabled={statusGroups.length === 0}
 							>
-								{statusGroups.map((group) => (
-									<StatusGroupItem
-										key={group.id}
-										group={group}
-										statusOptions={
-											availableOptionsByGroupId[group.id] ?? statusOptions
-										}
-										onNameChange={handleGroupNameChange}
-										onStatusesChange={handleGroupStatusesChange}
-									/>
-								))}
-							</SortableContext>
-						</DndContext>
+								Delete last group
+							</Button>
+						</div>
 					</div>
-				)}
-			</div>
+					{statusGroups.length === 0 ? (
+						<p className="text-sm text-slate-500">
+							Define status groups here. Click &quot;Add group&quot; to create your first one.
+						</p>
+					) : (
+						<div className="max-h-96 overflow-y-auto pr-1">
+							<DndContext
+								sensors={sensors}
+								collisionDetection={closestCenter}
+								onDragEnd={handleDragEnd}
+							>
+								<SortableContext
+									items={statusGroups.map((group) => group.id)}
+									strategy={verticalListSortingStrategy}
+								>
+									{statusGroups.map((group) => (
+										<StatusGroupItem
+											key={group.id}
+											group={group}
+											statusOptions={
+												availableOptionsByGroupId[group.id] ?? statusOptions
+											}
+											onNameChange={handleGroupNameChange}
+											onStatusesChange={handleGroupStatusesChange}
+										/>
+									))}
+								</SortableContext>
+							</DndContext>
+						</div>
+					)}
+				</div>
 
-			<div className="mt-4">
-				<h3 className="mb-2">Filter jobs</h3>
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-					<div>
+				<div className="mt-4">
+					<h3 className="mb-2">Filter jobs</h3>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<div>
+							<label className="mb-1 block text-xs font-medium text-slate-600">
+								Earliest job creation date
+							</label>
+							<Input
+								type="date"
+								size="sm"
+								value={earliestCreatedDate}
+								onChange={(e) => setEarliestCreatedDate(e.target.value)}
+							/>
+						</div>
+						<div>
+							<label className="mb-1 block text-xs font-medium text-slate-600">
+								Latest job creation date
+							</label>
+							<Input
+								type="date"
+								size="sm"
+								value={latestCreatedDate}
+								onChange={(e) => setLatestCreatedDate(e.target.value)}
+							/>
+						</div>
+						<div>
+							<label className="mb-1 block text-xs font-medium text-slate-600">
+								Filter by state
+							</label>
+							<Select
+								menuPortalTarget={document.body}
+								menuPosition="fixed"
+								styles={{
+									menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+								}}
+								options={stateOptions}
+								value={
+									stateOptions.find((option) => option.value === selectedBranch) ??
+									null
+								}
+								onChange={(option: SingleValue<BranchOption>) => {
+									setSelectedBranch(option?.value ?? "");
+								}}
+								classNamePrefix="branch-select"
+								placeholder="Select a state"
+							/>
+						</div>
+						<div>
+							<label className="mb-1 block text-xs font-medium text-slate-600">
+								Filter by sales rep
+							</label>
+							<Select
+								isMulti
+								menuPortalTarget={document.body}
+								menuPosition="fixed"
+								styles={{
+									menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+								}}
+								options={salesRepOptions}
+								value={selectedSalesReps.map(
+									(name) =>
+										salesRepOptions.find((option) => option.value === name) ?? {
+											value: name,
+											label: `Unknown rep ${name}`,
+										},
+								)}
+								onChange={(selected: MultiValue<SalesRepOption>) => {
+									const values = selected.map((option) => option.value);
+									setSelectedSalesReps(values);
+								}}
+								classNamePrefix="sales-rep-select"
+								placeholder="Select sales reps (empty for all)"
+							/>
+						</div>
+					</div>
+				</div>
+
+				<div className="mt-4">
+					<h3 className="mb-2">Other graph settings</h3>
+					<div className="w-48">
 						<label className="mb-1 block text-xs font-medium text-slate-600">
-							Earliest job creation date
+							Hide flows with fewer than <i>N</i> jobs
 						</label>
 						<Input
-							type="date"
+							type="number"
 							size="sm"
-							value={earliestCreatedDate}
-							onChange={(e) => setEarliestCreatedDate(e.target.value)}
-						/>
-					</div>
-					<div>
-						<label className="mb-1 block text-xs font-medium text-slate-600">
-							Latest job creation date
-						</label>
-						<Input
-							type="date"
-							size="sm"
-							value={latestCreatedDate}
-							onChange={(e) => setLatestCreatedDate(e.target.value)}
-						/>
-					</div>
-					<div>
-						<label className="mb-1 block text-xs font-medium text-slate-600">
-							Filter by state
-						</label>
-						<Select
-							menuPortalTarget={document.body}
-							menuPosition="fixed"
-							styles={{
-								menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-							}}
-							options={stateOptions}
-							value={
-								stateOptions.find((option) => option.value === selectedBranch) ??
-								null
-							}
-							onChange={(option: SingleValue<BranchOption>) => {
-								setSelectedBranch(option?.value ?? "");
-							}}
-							classNamePrefix="branch-select"
-							placeholder="Select a state"
-						/>
-					</div>
-					<div>
-						<label className="mb-1 block text-xs font-medium text-slate-600">
-							Filter by sales rep
-						</label>
-						<Select
-							isMulti
-							menuPortalTarget={document.body}
-							menuPosition="fixed"
-							styles={{
-								menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-							}}
-							options={salesRepOptions}
-							value={selectedSalesReps.map(
-								(name) =>
-									salesRepOptions.find((option) => option.value === name) ?? {
-										value: name,
-										label: `Unknown rep ${name}`,
-									},
-							)}
-							onChange={(selected: MultiValue<SalesRepOption>) => {
-								const values = selected.map((option) => option.value);
-								setSelectedSalesReps(values);
-							}}
-							classNamePrefix="sales-rep-select"
-							placeholder="Select sales reps (empty for all)"
+							value={minJobsPerFlow}
+							onChange={(e) => setMinJobsPerFlow(e.target.value)}
+							placeholder="Enter a number"
 						/>
 					</div>
 				</div>
-			</div>
 
-			<div className="mt-4">
-				<h3 className="mb-2">Other graph settings</h3>
-				<div className="w-48">
-					<label className="mb-1 block text-xs font-medium text-slate-600">
-						Hide flows with fewer than <i>N</i> jobs
-					</label>
-					<Input
-						type="number"
-						size="sm"
-						value={minJobsPerFlow}
-						onChange={(e) => setMinJobsPerFlow(e.target.value)}
-						placeholder="Enter a number"
-					/>
-				</div>
-			</div>
+				<Button onClick={calculateSankeyData} size="md" className="mt-4">
+					Generate Sankey Diagram
+				</Button>
+			</Card>
 
-			<Button onClick={calculateSankeyData} size="md" className="mt-4">
-				Generate Sankey Diagram
-			</Button>
+			<Card className="mt-8">
+				<h2 className="mb-2">Sankey Diagram</h2>
 
-			<Plot
-				data={plotlyInputData}
-				layout={plotlyLayout}
-				useResizeHandler
-			/>
-		</Card>
+				<Plot
+					data={plotlyInputData}
+					layout={plotlyLayout}
+					useResizeHandler
+				/>
+			</Card>
+		</>
 	);
 }
 
