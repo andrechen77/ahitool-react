@@ -16,6 +16,12 @@
 	},
 	"compatibility_flags": [
 		"nodejs_compat"
+	],
+	"routes": [
+		{
+			"pattern": "ahitool.andrechen.org",
+			"custom_domain": true
+		}
 	]
 	/**
 	 * Smart Placement
