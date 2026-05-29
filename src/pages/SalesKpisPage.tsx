@@ -36,6 +36,39 @@ function SalesKpisPage() {
 	);
 }
 
+const DEFAULT_STATUS_GROUPS = [
+	{
+		id: "group-0",
+		groupName: "Lead",
+		statusNames: ["Incoming Lead", "Cold Lead", "Long Term Lead Follow Up", "Warm Lead", "Hot Lead"],
+	},
+	{
+		id: "group-1",
+		groupName: "Appt",
+		statusNames: ["Reschedule Appointment", "Appointment Scheduled", "Estimating", "Follow-Up"],
+	},
+	{
+		id: "group-2",
+		groupName: "Contingency",
+		statusNames: ["Signed Contingency", "Waiting on Insurance Scope", "New Supplement Request", "Approval Supplement Pending", "Pre-Install Supplement Pending", "Claim Approved"],
+	},
+	{
+		id: "group-3",
+		groupName: "Contract",
+		statusNames: ["Signed Contract", "Submit Job for Production Approval", "Job Approved for Production", "Waiting on Materials", "Jobs Scheduled", "Jobs In Progress"],
+	},
+	{
+		id: "group-4",
+		groupName: "Installed",
+		statusNames: ["Final Walk Around", "Job Completed", "Punch List", "Submit COC & Proof of Completion", "Post-Install Supplement Pending", "Pending Payments", "Collections", "Paid & Closed"],
+	},
+	{
+		id: "group-5",
+		groupName: "Lost",
+		statusNames: ["Lost"],
+	},
+];
+
 function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	const { statuses, leadSources, activitiesByJobJnid, jobsByJnid, states, salesReps } = jnData;
 
