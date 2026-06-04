@@ -490,10 +490,10 @@ function SelectedJobsTable({
 						<table className="table w-full table-fixed text-sm">
 							<thead>
 								<tr className="table-header-row">
-									<th className="table-header-cell w-[30%] whitespace-nowrap">Name</th>
+									<th className="table-header-cell w-[33%] whitespace-nowrap">Name</th>
 									<th className="table-header-cell w-[18%] whitespace-nowrap">Created date</th>
 									<th className="table-header-cell w-[34%] whitespace-nowrap">Status</th>
-									<th className="table-header-cell w-[18%] whitespace-nowrap">Job number</th>
+									<th className="table-header-cell w-[15%] whitespace-nowrap">Job no.</th>
 								</tr>
 							</thead>
 							<tbody>
