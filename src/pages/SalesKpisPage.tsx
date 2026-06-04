@@ -487,18 +487,25 @@ function SelectedJobsTable({
 			) : (
 				<>
 					<div className="overflow-x-auto">
-						<table className="table text-sm">
+						<table className="table w-full table-fixed text-sm">
 							<thead>
 								<tr className="table-header-row">
-									<th className="table-header-cell">Name</th>
-									<th className="table-header-cell">Created date</th>
-									<th className="table-header-cell">Status</th>
-									<th className="table-header-cell">Job number</th>
+									<th className="table-header-cell w-[30%] whitespace-nowrap">Name</th>
+									<th className="table-header-cell w-[18%] whitespace-nowrap">Created date</th>
+									<th className="table-header-cell w-[34%] whitespace-nowrap">Status</th>
+									<th className="table-header-cell w-[18%] whitespace-nowrap">Job number</th>
 								</tr>
 							</thead>
 							<tbody>
 								{pageJobs.map((job) => {
 									const href = jobNimbusJobUrl(job.jnid);
+									const name = job.jobName ?? '—';
+									const createdDate = formatJobDate(job.createdDate);
+									const status = formatJobStatusWithGroup(
+										job.status.name,
+										statusNameToGroup,
+									);
+									const jobNumber = job.jobNumber ?? '—';
 									return (
 										<tr
 											key={job.jnid}
@@ -514,12 +521,14 @@ function SelectedJobsTable({
 												}
 											}}
 										>
-											<td className="table-cell">{job.jobName ?? '—'}</td>
-											<td className="table-cell">{formatJobDate(job.createdDate)}</td>
-											<td className="table-cell">
-												{formatJobStatusWithGroup(job.status.name, statusNameToGroup)}
-											</td>
-											<td className="table-cell">{job.jobNumber ?? '—'}</td>
+											<TruncatedTableCell title={name}>{name}</TruncatedTableCell>
+											<TruncatedTableCell title={createdDate}>
+												{createdDate}
+											</TruncatedTableCell>
+											<TruncatedTableCell title={status}>{status}</TruncatedTableCell>
+											<TruncatedTableCell title={jobNumber}>
+												{jobNumber}
+											</TruncatedTableCell>
 										</tr>
 									);
 								})}
@@ -555,6 +564,20 @@ function SelectedJobsTable({
 				</>
 			)}
 		</>
+	);
+}
+
+function TruncatedTableCell({
+	children,
+	title,
+}: {
+	children: React.ReactNode;
+	title: string;
+}) {
+	return (
+		<td className="table-cell max-w-0 truncate whitespace-nowrap" title={title}>
+			{children}
+		</td>
 	);
 }
 
