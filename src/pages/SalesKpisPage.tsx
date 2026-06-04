@@ -477,12 +477,10 @@ function SelectedJobsTable({
 
 	return (
 		<>
-			<div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-				<h2 className="mb-0">Selected jobs</h2>
-				<p className="text-sm text-slate-600">
-					{jobs.length} job{jobs.length === 1 ? '' : 's'} matching filters
-				</p>
-			</div>
+			<h2 className="mb-1">Selected jobs</h2>
+			<p className="mb-3 text-sm text-slate-600">
+				Total: {jobs.length} job{jobs.length === 1 ? '' : 's'}
+			</p>
 
 			{jobs.length === 0 ? (
 				<p className="text-sm text-slate-500">No jobs match the current filters.</p>
