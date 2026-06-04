@@ -56,9 +56,10 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	const [hasGenerated, setHasGenerated] = useState(false);
 	const [sankeyData, setSankeyData] = useState<KpiSankeyData>({
 		nodeNames: [],
+		jobsOnNode: [],
 		sourceIds: [],
 		targetIds: [],
-		jobs: [],
+		jobsOnLink: [],
 		averageDurationMs: [],
 	});
 	const plotlyInputData = useMemo(() => {
@@ -70,12 +71,14 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 				pad: 15,
 				thickness: 20,
 				line: { color: '#000', width: 0.5 },
+				hovertemplate: "%{label}<br>Jobs reached this status: %{value}<br>Jobs currently at this status: %{customdata}",
 				label: sankeyData.nodeNames,
+				customdata: sankeyData.jobsOnNode.map(l => l.length),
 			},
 			link: {
 				source: sankeyData.sourceIds,
 				target: sankeyData.targetIds,
-				value: sankeyData.jobs.map(jobs => jobs.length),
+				value: sankeyData.jobsOnLink.map(jobs => jobs.length),
 				hovertemplate: "%{source.label} -> %{target.label}<br>Number of jobs: %{value}<br>Average duration: %{customdata:.0f} days",
 				customdata: sankeyData.averageDurationMs.map(d => d / 86400000),
 			},
@@ -161,12 +164,13 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 
 		const { data, invisibleJobs } = await generateKpiGraph(statusGroupsObj, activitiesByJobJnid, filteredJobsByJnid);
 
+		// filter out links with fewer than minJobsPerFlow jobs
 		const minJobsPerFlowVal = Number(minJobsPerFlow);
-		for (let i = 0; i < data.jobs.length; i++) {
-			if (data.jobs[i].length < minJobsPerFlowVal) {
-				invisibleJobs.push(...data.jobs[i]);
+		for (let i = 0; i < data.jobsOnLink.length; i++) {
+			if (data.jobsOnLink[i].length < minJobsPerFlowVal) {
+				invisibleJobs.push(...data.jobsOnLink[i]);
 
-				data.jobs.splice(i, 1);
+				data.jobsOnLink.splice(i, 1);
 				data.sourceIds.splice(i, 1);
 				data.targetIds.splice(i, 1);
 				data.averageDurationMs.splice(i, 1);

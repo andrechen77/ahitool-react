@@ -60,10 +60,18 @@ function constructJobStatusHistory(baseData: JobBaseData, activities: JnActivity
 }
 
 export interface KpiSankeyData {
+    // The names of the nodes in the graph.
     nodeNames: string[],
+    // The ith entry corresponds to the ith node: the list of jobJnids whose
+    // last status is the node.
+    jobsOnNode: string[][],
+    // The ith entry corresponds to the ith link: source node of the link.
     sourceIds: number[],
+    // The ith entry corresponds to the ith link: target node of the link.
     targetIds: number[],
-    jobs: string[][],
+    // The ith entry corresponds to the ith link: list of jobJnids on the link.
+    jobsOnLink: string[][],
+    // The ith entry corresponds to the ith link: average duration of the jobs on the link.
     averageDurationMs: number[],
 }
 
@@ -97,7 +105,7 @@ class JobGraphEmbedding {
     // Maps each status name to the name of the node that corresponds to that status.
     private statusToNode: Partial<Record<string, string>>;
     private removeCycles: boolean;
-    private graph: Graph<{}, { jobJnids: string[], totalDurationMs: number }>;
+    private graph: Graph<{ jobJnids: string[] }, { jobJnids: string[], totalDurationMs: number }>;
 
     constructor(statusGroups: { [statusGroup: string]: string[] }, removeCycles: boolean) {
         let statusToNode: { [statusId: string]: string } = {};
@@ -185,16 +193,24 @@ class JobGraphEmbedding {
             lastNode = nodeName;
         }
 
+        // add the jobJnid to the list of jobs on the last node
+        this.graph.updateNodeAttribute(lastNode, "jobJnids", jnids => [...(jnids ?? []), jobJnid]);
+
         return nodeHistory.length;
     }
 
     calculateSankeyData(): KpiSankeyData {
-        // assign a unique id to each node in the graph
         const nodeNameToId: Record<string, number> = {};
         const nodeNames: string[] = [];
+        const jobsOnNode: string[][] = [];
         let nextId = 0;
         this.graph.forEachNode((nodeName) => {
+            // assign a unique id to each node in the graph
             nodeNameToId[nodeName] = nextId++;
+
+            // add the jobs on this node to the list of jobs on the node
+            jobsOnNode.push(this.graph.getNodeAttribute(nodeName, "jobJnids") ?? []);
+
             if (nodeName === null || nodeName == "null") {
                 nodeName = "Start";
             }
@@ -203,21 +219,22 @@ class JobGraphEmbedding {
 
         let sourceIds: number[] = [];
         let targetIds: number[] = [];
-        let jobs: string[][] = [];
+        let jobsOnLink: string[][] = [];
         let averageDurationMs: number[] = [];
 
         this.graph.forEachEdge((_, attr, source, target) => {
             sourceIds.push(nodeNameToId[source]);
             targetIds.push(nodeNameToId[target]);
-            jobs.push(attr.jobJnids);
+            jobsOnLink.push(attr.jobJnids);
             averageDurationMs.push(attr.totalDurationMs / attr.jobJnids.length);
         });
 
         return {
             nodeNames,
+            jobsOnNode,
             sourceIds,
             targetIds,
-            jobs,
+            jobsOnLink,
             averageDurationMs,
         };
     }
