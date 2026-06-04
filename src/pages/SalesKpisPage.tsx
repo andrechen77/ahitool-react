@@ -181,31 +181,10 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 
 	return (
 		<>
-			<div className="mt-6 grid min-h-128 grid-cols-1 gap-6 lg:grid-cols-2">
-				<div className="flex min-h-64 flex-col gap-4 lg:min-h-0">
+			<div className="mt-6 grid min-h-128 grid-cols-1 gap-6 lg:grid-cols-[30%_1fr]">
+				<aside className="min-w-0">
 					<Card>
-						<SelectedJobsTable
-							jobs={selectedJobs}
-							statusGroups={statusGroups}
-							page={selectedJobsPage}
-							onPageChange={setSelectedJobsPage}
-							hasGenerated={hasGenerated}
-						/>
-					</Card>
-					<Card className="flex-1">
-						<h2 className="mb-2">Sankey Diagram</h2>
-						<Plot
-							data={plotlyInputData}
-							layout={plotlyLayout}
-							useResizeHandler
-							style={{ width: '100%' }}
-						/>
-					</Card>
-				</div>
-
-				<aside>
-					<Card>
-						<h2 className="mb-4">Settings</h2>
+						<h2 className="mb-4">Search settings</h2>
 
 						<div className="space-y-6">
 							<div>
@@ -364,6 +343,27 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 						</div>
 					</Card>
 				</aside>
+
+				<div className="flex min-h-64 min-w-0 flex-col gap-4 lg:min-h-0">
+					<Card>
+						<SelectedJobsTable
+							jobs={selectedJobs}
+							statusGroups={statusGroups}
+							page={selectedJobsPage}
+							onPageChange={setSelectedJobsPage}
+							hasGenerated={hasGenerated}
+						/>
+					</Card>
+					<Card className="flex-1">
+						<h2 className="mb-2">Sankey Diagram</h2>
+						<Plot
+							data={plotlyInputData}
+							layout={plotlyLayout}
+							useResizeHandler
+							style={{ width: '100%' }}
+						/>
+					</Card>
+				</div>
 			</div>
 
 			<StatusGroupsModal
