@@ -32,7 +32,7 @@ function App() {
             </nav>
           </header>
 
-          <main className="flex-1 max-w-3xl w-full mx-auto my-8 mb-12 px-6">
+          <main className="flex-1 max-w-7xl w-full mx-auto my-8 mb-12 px-6">
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route path="/sales-kpis" element={<SalesKpisPage />} />
