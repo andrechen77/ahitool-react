@@ -129,18 +129,18 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 		(str) => JSON.parse(str) as string[],
 		() => [],
 	);
-	const [minJobSize, setMinJobSize] = useSavedState<string>(
-		"sales-kpis:filter_min_job_size",
-		String,
-		String,
-		() => "",
-	);
-	const [maxJobSize, setMaxJobSize] = useSavedState<string>(
-		"sales-kpis:filter_max_job_size",
-		String,
-		String,
-		() => "",
-	);
+	// const [minJobSize, setMinJobSize] = useSavedState<string>(
+	// 	"sales-kpis:filter_min_job_size",
+	// 	String,
+	// 	String,
+	// 	() => "",
+	// );
+	// const [maxJobSize, setMaxJobSize] = useSavedState<string>(
+	// 	"sales-kpis:filter_max_job_size",
+	// 	String,
+	// 	String,
+	// 	() => "",
+	// );
 
 	const [plotlyLayout] = useState({
 		autosize: true,
@@ -228,7 +228,7 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 											onChange={(e) => setLatestCreatedDate(e.target.value)}
 										/>
 									</div>
-									<div>
+									{/*<div>
 										<label className="mb-1 block text-xs font-medium text-slate-600">
 											Minimum job size ($)
 										</label>
@@ -255,7 +255,7 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 											onChange={(e) => setMaxJobSize(e.target.value)}
 											placeholder="No maximum"
 										/>
-									</div>
+									</div>*/}
 									<div>
 										<label className="mb-1 block text-xs font-medium text-slate-600">
 											Filter by state
