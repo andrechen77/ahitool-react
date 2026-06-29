@@ -145,17 +145,31 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 	const [plotlyLayout] = useState({
 		autosize: true,
 	});
-
-	const calculateSankeyData = async () => {
-		const statusGroupsObj = statusGroupsToRecord(statusGroups);
-
-		const filteredJobs = filterJobs(jobsByJnid, {
+	const jobFilters = useMemo<JobFilters>(
+		() => ({
+			earliestCreatedDate: earliestCreatedDate
+				? dateInputToLocalDate(earliestCreatedDate)
+				: null,
+			latestCreatedDate: latestCreatedDate
+				? dateInputToLocalDate(latestCreatedDate)
+				: null,
+			selectedBranch,
+			selectedSalesReps,
+			selectedLeadSources,
+		}),
+		[
 			earliestCreatedDate,
 			latestCreatedDate,
 			selectedBranch,
 			selectedSalesReps,
 			selectedLeadSources,
-		});
+		],
+	);
+
+	const calculateSankeyData = async () => {
+		const statusGroupsObj = statusGroupsToRecord(statusGroups);
+
+		const filteredJobs = filterJobs(jobsByJnid, jobFilters);
 		const filteredJobsByJnid = Object.fromEntries(filteredJobs.map((job) => [job.jnid, job]));
 
 		setSelectedJobs(filteredJobs);
@@ -370,6 +384,14 @@ function SalesKpisContent({ jnData }: { jnData: JobNimbusData }) {
 				</div>
 			</div>
 
+			<Card className="mt-6">
+				<CheckJobFilterCard
+					jobsByJnid={jobsByJnid}
+					selectedJobs={selectedJobs}
+					filters={jobFilters}
+				/>
+			</Card>
+
 			<StatusGroupsModal
 				isOpen={statusGroupsModalOpen}
 				onClose={() => setStatusGroupsModalOpen(false)}
@@ -397,51 +419,286 @@ interface LeadSourceOption {
 }
 
 interface JobFilters {
-	earliestCreatedDate: string;
-	latestCreatedDate: string;
+	earliestCreatedDate: Date | null;
+	latestCreatedDate: Date | null;
 	selectedBranch: string;
 	selectedSalesReps: string[];
 	selectedLeadSources: string[];
+}
+
+interface JobFilterCriteriaResult {
+	earliestCreatedDate: boolean;
+	latestCreatedDate: boolean;
+	branch: boolean;
+	salesRep: boolean;
+	leadSource: boolean;
+}
+
+interface JobFilterDecision {
+	criteria: JobFilterCriteriaResult;
+	included: boolean;
+	explanations?: Record<keyof JobFilterCriteriaResult, string>;
+}
+
+function formatQuotedList(items: string[]): string {
+	if (items.length === 0) {
+		return '""';
+	}
+	const quoted = items.map((item) => `"${item}"`);
+	if (items.length === 1) {
+		return quoted[0];
+	}
+	if (items.length === 2) {
+		return `${quoted[0]} and ${quoted[1]}`;
+	}
+	return `${quoted.slice(0, -1).join(', ')}, and ${quoted[quoted.length - 1]}`;
+}
+
+function evaluateJobFilter(
+	job: JobBaseData,
+	filters: JobFilters,
+	generateExplanations = false,
+): JobFilterDecision {
+	const explanations: Partial<Record<keyof JobFilterCriteriaResult, string>> = {};
+
+	let earliestCreatedDate;
+	if (!filters.earliestCreatedDate) {
+		earliestCreatedDate = true;
+		if (generateExplanations) {
+			explanations.earliestCreatedDate = 'no earliest created date filter was specified';
+		}
+	} else {
+		earliestCreatedDate = job.createdDate >= filters.earliestCreatedDate;
+		if (generateExplanations) {
+			const jobDate = formatJobDate(job.createdDate);
+			const filterDate = formatJobDate(filters.earliestCreatedDate);
+			explanations.earliestCreatedDate = earliestCreatedDate
+				? `job was created on ${jobDate}, on or after ${filterDate}`
+				: `job was created on ${jobDate}, before ${filterDate}`;
+		}
+	}
+
+	let latestCreatedDate;
+	if (!filters.latestCreatedDate) {
+		latestCreatedDate = true;
+		if (generateExplanations) {
+			explanations.latestCreatedDate = 'no latest created date filter was specified';
+		}
+	} else {
+		latestCreatedDate = job.createdDate <= filters.latestCreatedDate;
+		if (generateExplanations) {
+			const jobDate = formatJobDate(job.createdDate);
+			const filterDate = formatJobDate(filters.latestCreatedDate);
+			explanations.latestCreatedDate = latestCreatedDate
+				? `job was created on ${jobDate}, on or before ${filterDate}`
+				: `job was created on ${jobDate}, after ${filterDate}`;
+		}
+	}
+
+	let branch;
+	if (filters.selectedBranch === '') {
+		branch = true;
+		if (generateExplanations) {
+			explanations.branch = 'no branch/state filter was specified';
+		}
+	} else {
+		branch = job.state === filters.selectedBranch;
+		if (generateExplanations) {
+			explanations.branch = branch
+				? `"${job.state}" matches the selected state "${filters.selectedBranch}"`
+				: `job state is "${job.state}", but the filter is set to "${filters.selectedBranch}"`;
+		}
+	}
+
+	let salesRep;
+	if (filters.selectedSalesReps.length === 0) {
+		salesRep = true;
+		if (generateExplanations) {
+			explanations.salesRep = 'no sales rep filter was specified';
+		}
+	} else {
+		salesRep =
+			job.salesRep !== null && filters.selectedSalesReps.includes(job.salesRep);
+		if (generateExplanations) {
+			const selected = formatQuotedList(filters.selectedSalesReps);
+			if (salesRep) {
+				explanations.salesRep = `"${job.salesRep}" is included in ${selected}`;
+			} else if (job.salesRep === null) {
+				explanations.salesRep = `job has no sales rep assigned, but the filter requires one of ${selected}`;
+			} else {
+				explanations.salesRep = `"${job.salesRep}" is not among the selected sales reps (${selected})`;
+			}
+		}
+	}
+
+	let leadSource;
+	if (filters.selectedLeadSources.length === 0) {
+		leadSource = true;
+		if (generateExplanations) {
+			explanations.leadSource = 'no lead source filter was specified';
+		}
+	} else {
+		leadSource =
+			job.leadSourceName !== null &&
+			filters.selectedLeadSources.includes(job.leadSourceName);
+		if (generateExplanations) {
+			const selected = formatQuotedList(filters.selectedLeadSources);
+			if (leadSource) {
+				explanations.leadSource = `"${job.leadSourceName}" is included in ${selected}`;
+			} else if (job.leadSourceName === null) {
+				explanations.leadSource = `job has no lead source, but the filter requires one of ${selected}`;
+			} else {
+				explanations.leadSource = `"${job.leadSourceName}" is not among the selected lead sources (${selected})`;
+			}
+		}
+	}
+
+	const criteria = {
+		earliestCreatedDate,
+		latestCreatedDate,
+		branch,
+		salesRep,
+		leadSource,
+	};
+
+	const included =
+		criteria.earliestCreatedDate &&
+		criteria.latestCreatedDate &&
+		criteria.branch &&
+		criteria.salesRep &&
+		criteria.leadSource;
+
+	if (!generateExplanations) {
+		return { criteria, included };
+	}
+
+	return {
+		criteria,
+		included,
+		explanations: explanations as Record<keyof JobFilterCriteriaResult, string>,
+	};
 }
 
 function filterJobs(
 	jobsByJnid: Record<string, JobBaseData>,
 	filters: JobFilters,
 ): JobBaseData[] {
-	const earliestCreatedDateLocal = filters.earliestCreatedDate
-		? dateInputToLocalDate(filters.earliestCreatedDate)
-		: null;
-	const latestCreatedDateLocal = filters.latestCreatedDate
-		? dateInputToLocalDate(filters.latestCreatedDate)
-		: null;
-
 	return Object.values(jobsByJnid)
-		.filter((job) => {
-			if (earliestCreatedDateLocal && job.createdDate < earliestCreatedDateLocal) {
-				return false;
-			}
-			if (latestCreatedDateLocal && job.createdDate > latestCreatedDateLocal) {
-				return false;
-			}
-			if (filters.selectedBranch !== "" && job.state !== filters.selectedBranch) {
-				return false;
-			}
-			if (
-				filters.selectedSalesReps.length > 0 &&
-				(job.salesRep === null || !filters.selectedSalesReps.includes(job.salesRep))
-			) {
-				return false;
-			}
-			if (
-				filters.selectedLeadSources.length > 0 &&
-				(job.leadSourceName === null ||
-					!filters.selectedLeadSources.includes(job.leadSourceName))
-			) {
-				return false;
-			}
-			return true;
-		})
+		.filter((job) => evaluateJobFilter(job, filters).included)
 		.sort((a, b) => b.createdDate.getTime() - a.createdDate.getTime());
+}
+
+type JobFilterCheckResult =
+	| { jnid: string; jobFound: false }
+	| {
+		jnid: string;
+		jobFound: true;
+		inSelectedJobs: boolean;
+		filterDecision: JobFilterDecision;
+	};
+
+const JOB_FILTER_CRITERIA_LABELS: Record<keyof JobFilterCriteriaResult, string> = {
+	earliestCreatedDate: 'Earliest created date',
+	latestCreatedDate: 'Latest created date',
+	branch: 'Branch/state',
+	salesRep: 'Sales rep',
+	leadSource: 'Lead source',
+};
+
+function CheckJobFilterCard({
+	jobsByJnid,
+	selectedJobs,
+	filters,
+}: {
+	jobsByJnid: Record<string, JobBaseData>;
+	selectedJobs: JobBaseData[];
+	filters: JobFilters;
+}) {
+	const [jnid, setJnid] = useState('');
+	const [result, setResult] = useState<JobFilterCheckResult | null>(null);
+
+	const handleCheck = () => {
+		const trimmedJnid = jnid.trim();
+		if (!trimmedJnid) {
+			setResult(null);
+			return;
+		}
+
+		if (!(trimmedJnid in jobsByJnid)) {
+			setResult({ jnid: trimmedJnid, jobFound: false });
+			return;
+		}
+
+		const job = jobsByJnid[trimmedJnid];
+		const filterDecision = evaluateJobFilter(job, filters, true);
+
+		setResult({
+			jnid: trimmedJnid,
+			jobFound: true,
+			inSelectedJobs: selectedJobs.some((selectedJob) => selectedJob.jnid === trimmedJnid),
+			filterDecision,
+		});
+	};
+
+	return (
+		<>
+			<h2 className="mb-4">Check if job was filtered</h2>
+			<div className="flex flex-wrap items-end gap-3">
+				<div className="min-w-64 flex-1">
+					<label className="mb-1 block text-xs font-medium text-slate-600">Job JNID</label>
+					<Input
+						type="text"
+						size="sm"
+						value={jnid}
+						onChange={(e) => setJnid(e.target.value)}
+						placeholder="Enter a job JNID"
+					/>
+				</div>
+				<Button type="button" size="md" onClick={handleCheck}>
+					Check
+				</Button>
+			</div>
+
+			{result && (
+				<div className="mt-4 space-y-3 text-sm">
+					{!result.jobFound ? (
+						<p className="text-slate-500">
+							No job with JNID &quot;{result.jnid}&quot; was found in the loaded data.
+						</p>
+					) : (
+						<>
+							<p>
+								<span className="font-medium text-slate-800">In selected jobs:</span>{' '}
+								{result.inSelectedJobs ? 'Yes' : 'No'}
+							</p>
+							<div className="space-y-2">
+								<p>
+									<span className="font-medium text-slate-800">Filter decision:</span>{' '}
+									{result.filterDecision.included ? 'Included' : 'Excluded'}
+								</p>
+								<ul className="space-y-1">
+									{(Object.keys(JOB_FILTER_CRITERIA_LABELS) as (keyof JobFilterCriteriaResult)[]).map(
+										(key) => {
+											const passed = result.filterDecision.criteria[key];
+											return (
+												<li key={key}>
+													<span className="font-medium text-slate-800">
+														{JOB_FILTER_CRITERIA_LABELS[key]}:
+													</span>{' '}
+													{passed ? 'Passed' : 'Failed'} (
+													{result.filterDecision.explanations![key]})
+												</li>
+											);
+										},
+									)}
+								</ul>
+							</div>
+						</>
+					)}
+				</div>
+			)}
+		</>
+	);
 }
 
 interface SelectedJobsTableProps {
@@ -586,11 +843,17 @@ function TruncatedTableCell({
 }
 
 function formatJobDate(date: Date) {
-	return date.toLocaleDateString(undefined, {
+	const localString = date.toLocaleString(undefined, {
 		year: 'numeric',
 		month: 'short',
 		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		second: '2-digit',
+		hour12: false,
+		timeZoneName: 'short',
 	});
+	return localString;
 }
 
 function dateInputToLocalDate(value: string) {
