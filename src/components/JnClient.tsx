@@ -7,40 +7,24 @@ import { Card } from './ui/Card';
 import { cn } from '../util/cn';
 import { ApiKeyError } from '../lib/job_nimbus/api';
 
-type Tab = 'apiKey' | 'overview' | 'statuses' | 'leadSources' | 'jobs';
+type Tab = 'apiKey' | 'overview' | 'statuses' | 'leadSources' | 'salesReps';
 
 function JnClient() {
-	const {
-		data: jnData,
-		isLoading,
-		refresh,
-	} = useJobNimbusData();
+	const { metadata, isLoadingMetadata, loadMetadata } = useJobNimbusData();
 
-	const statuses = jnData?.statuses ?? {};
-	const leadSources = jnData?.leadSources ?? {};
-	const jobsByJnid = jnData?.jobsByJnid ?? {};
-	const activitiesByJobJnid = jnData?.activitiesByJobJnid ?? {};
+	const statuses = metadata?.statuses ?? {};
+	const leadSources = metadata?.leadSources ?? {};
 
 	const { apiKey, openModal } = useApiKey();
 	const [activeTab, setActiveTab] = useState<Tab>('overview');
-	const [jobJnidQuery, setJobJnidQuery] = useState('');
 
 	useEffect(() => {
-		refresh(null).catch(error => {
-			if (error instanceof ApiKeyError) {
-				// we expect and ignore this since we pass null as the API key,
-				// preventing a fetch
-
-				// except if the user hasn't entered an API key yet, then nudge
-				// them
-				if (apiKey === "") {
-					openModal("Enter an API key to access JobNimbus data.");
-					setActiveTab('apiKey');
-				}
-			} else {
-				throw error;
-			}
-		});
+		if (apiKey && apiKey.length === 16) {
+			handleRefresh();
+		} else if (apiKey === "") {
+			openModal("Enter an API key to access JobNimbus data.");
+			setActiveTab('apiKey');
+		}
 	}, []);
 
 	const statusesArray = Object.values(statuses);
@@ -48,7 +32,7 @@ function JnClient() {
 
 	const handleRefresh = async () => {
 		try {
-			await refresh(apiKey);
+			await loadMetadata(apiKey);
 		} catch (error) {
 			if (error instanceof ApiKeyError) {
 				openModal("Invalid API key. Make sure you entered the key correctly.");
@@ -59,7 +43,7 @@ function JnClient() {
 		setActiveTab('overview');
 	};
 
-	const suggestRefresh = apiKey.length > 0 && jnData === null && !isLoading;
+	const suggestRefresh = apiKey.length > 0 && metadata === null && !isLoadingMetadata;
 
 	return (
 		<Card className="my-2">
@@ -71,17 +55,17 @@ function JnClient() {
 						variant="ghost"
 						className={suggestRefresh ? 'pop-button' : ''}
 						icon
-						disabled={isLoading}
-						title="Refresh data"
+						disabled={isLoadingMetadata}
+						title="Refresh metadata"
 					>
-						<FaSyncAlt className={isLoading ? 'animate-spin' : ''} />
+						<FaSyncAlt className={isLoadingMetadata ? 'animate-spin' : ''} />
 					</Button>
 					{suggestRefresh ? (
-						<p className="text-sm text-slate-500">Refresh data</p>
-					) : isLoading ? (
-						<p className="text-sm text-slate-500">Loading data. This may take a minute...</p>
-					) : jnData !== null ? (
-						<p className="text-sm text-slate-500">Data loaded</p>
+						<p className="text-sm text-slate-500">Load data</p>
+					) : isLoadingMetadata ? (
+						<p className="text-sm text-slate-500">Loading metadata...</p>
+					) : metadata !== null ? (
+						<p className="text-sm text-slate-500">Metadata loaded</p>
 					) : null}
 				</div>
 			</div>
@@ -100,13 +84,13 @@ function JnClient() {
 					<TabButton tab="leadSources" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Lead Sources
 					</TabButton>
-					<TabButton tab="jobs" activeTab={activeTab} setActiveTab={setActiveTab}>
-						Jobs
+					<TabButton tab="salesReps" activeTab={activeTab} setActiveTab={setActiveTab}>
+						Sales Reps
 					</TabButton>
 				</div>
 			</div>
 
-			{isLoading && <p>Loading JobNimbus data...</p>}
+			{isLoadingMetadata && <p>Loading metadata...</p>}
 
 			{activeTab === 'apiKey' && (
 				<div>
@@ -125,10 +109,7 @@ function JnClient() {
 						<span className="font-semibold">Lead sources:</span> {Object.keys(leadSources).length}
 					</p>
 					<p>
-						<span className="font-semibold">Jobs loaded:</span> {Object.keys(jobsByJnid).length}
-					</p>
-					<p>
-						<span className="font-semibold">Total activities:</span> {Object.values(activitiesByJobJnid).reduce((acc, arr) => acc + arr.length, 0)}
+						<span className="font-semibold">Sales reps:</span> {metadata?.salesReps.length ?? 0}
 					</p>
 				</div>
 			)}
@@ -175,43 +156,26 @@ function JnClient() {
 				</div>
 			)}
 
-			{activeTab === 'jobs' && (
-				<div className="space-y-4">
-					<div>
-						<label className="block text-sm font-medium mb-1" htmlFor="job-jnid-input">
-							Job JNID
-						</label>
-						<input
-							id="job-jnid-input"
-							type="text"
-							value={jobJnidQuery}
-							onChange={(e) => setJobJnidQuery(e.target.value)}
-							placeholder="Enter a Job JNID"
-							className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-500"
-						/>
-					</div>
-
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-						<div className="border border-slate-200 rounded-md p-2 bg-slate-50">
-							<h3 className="font-semibold mb-2 text-sm">jobsByJnid</h3>
-							<pre className="text-xs whitespace-pre-wrap break-all max-h-80 overflow-auto">
-								{JSON.stringify(
-									jobJnidQuery ? jobsByJnid[jobJnidQuery] ?? null : null,
-									null,
-									2,
-								)}
-							</pre>
-						</div>
-						<div className="border border-slate-200 rounded-md p-2 bg-slate-50">
-							<h3 className="font-semibold mb-2 text-sm">activitiesByJobJnid</h3>
-							<pre className="text-xs whitespace-pre-wrap break-all max-h-80 overflow-auto">
-								{JSON.stringify(
-									jobJnidQuery ? activitiesByJobJnid[jobJnidQuery] ?? null : null,
-									null,
-									2,
-								)}
-							</pre>
-						</div>
+			{activeTab === 'salesReps' && (
+				<div>
+					<p className="mb-3 text-xs text-slate-500 italic">
+						This list includes all users on the JobNimbus account. Some may not be sales reps.
+					</p>
+					<div className="max-h-96 overflow-y-auto border border-slate-200 rounded-md">
+						<table className="table">
+							<thead className="table-header-sticky">
+								<tr className="table-header-row">
+									<th className="table-header-cell">Name</th>
+								</tr>
+							</thead>
+							<tbody>
+								{(metadata?.salesReps ?? []).map((name) => (
+									<tr key={name} className="table-row">
+										<td className="table-cell">{name}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					</div>
 				</div>
 			)}

@@ -1,7 +1,6 @@
 // functions for interacting with the JobNimbus API and parsing the responses
 
 import { assertArray, assertObject } from "../types";
-import { jnCacheLoadOrCalculate, jnCacheLoadOrCalculateStream } from "./indexed_db";
 import { JobMilestone } from "./domain";
 import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
@@ -23,9 +22,8 @@ export class ApiKeyError extends Error {
 export async function requestFromJobNimbus(
     apiKey: string | null,
     endpoint: string,
-    // headers: Record<string, string>,
     params: Record<string, string>
-): Promise<Response> {
+): Promise<Response | null> {
     if (apiKey === null) {
         throw new ApiKeyError('An API key is required to access JobNimbus data', null);
     }
@@ -36,26 +34,20 @@ export async function requestFromJobNimbus(
         : '';
     const url = `${API_BASE}/api/jobnimbus/api1/${endpoint}${queryString}`;
 
-    // // get the api key
-    // const token = localStorage.getItem('job_nimbus_api_key');
-    // if (!token) {
-    //     throw new ApiKeyError('No JobNimbus API key found', null);
-    // }
-
-    // fetch the data
     console.log(`fetching ${url} with params ${JSON.stringify(params)}`);
     const response = await fetch(
         url,
         {
             headers: {
                 'Authorization': `Bearer ${apiKey}`,
-                // ...headers,
             },
         }
     );
     if (response.status === 200) {
         console.log(`response for ${url} complete: ${response.status} ${response.statusText}`);
         return response;
+    } else if (response.status === 304) {
+        return null;
     } else if (response.status === 401) {
         throw new ApiKeyError('Invalid JobNimbus API key', apiKey);
     } else {
@@ -63,21 +55,22 @@ export async function requestFromJobNimbus(
     }
 }
 
-// gets the contents of https://app.jobnimbus.com/api1/account/settings,
-// possibly cached.
-async function getSettings(apiKey: string | null): Promise<unknown> {
-    return await jnCacheLoadOrCalculate("settings", async () => {
-        return await requestFromJobNimbus(apiKey, "account/settings", {}).then(r => r.json());
-    });
+async function getSettings(apiKey: string | null): Promise<unknown | null> {
+    const response = await requestFromJobNimbus(apiKey, "account/settings", {});
+    if (response === null) return null;
+    return await response.json();
 }
 
-export async function getJobStatuses(apiKey: string | null): Promise<JobStatusRegistry> {
+export async function getStatusesAndLeadSources(apiKey: string | null): Promise<{
+    statuses: JobStatusRegistry;
+    leadSources: JobLeadSourceRegistry;
+} | null> {
     const settings = await getSettings(apiKey);
+    if (settings === null) return null;
     assertObject(settings);
 
     const allWorkflows = settings["workflows"];
     assertArray(allWorkflows);
-
     const workflows = allWorkflows.filter((w: any) => w["object_type"] === "job");
     assertArray(workflows);
 
@@ -90,15 +83,8 @@ export async function getJobStatuses(apiKey: string | null): Promise<JobStatusRe
             return acc;
         }, {});
 
-    return statuses;
-}
-
-export async function getLeadSources(apiKey: string | null): Promise<JobLeadSourceRegistry> {
-    const settings = await getSettings(apiKey);
-    assertObject(settings);
     assertArray(settings["sources"]);
-
-    const sources: JobLeadSourceRegistry = settings["sources"]
+    const leadSources: JobLeadSourceRegistry = settings["sources"]
         .reduce((acc: Record<number, JobLeadSource>, source: any) => {
             const id = Number(source["JobSourceId"]);
             const name = String(source["SourceName"]);
@@ -106,10 +92,67 @@ export async function getLeadSources(apiKey: string | null): Promise<JobLeadSour
             return acc;
         }, {});
 
-    return sources;
+    return { statuses, leadSources };
 }
 
-// repeatedly make requests from JobNimbus until all items are fetched
+export async function getSalesReps(apiKey: string | null): Promise<string[] | null> {
+    const response = await requestFromJobNimbus(apiKey, "account/users", {});
+    if (response === null) return null;
+    const data: unknown = await response.json();
+    assertObject(data);
+
+    const users = data["users"];
+    assertArray(users);
+
+    return users.map((user: any) => {
+        const first = String(user["first_name"] ?? "").trim();
+        const last = String(user["last_name"] ?? "").trim();
+        return [first, last].filter(Boolean).join(" ");
+    }).filter((name: string) => name !== "");
+}
+
+export interface JobFiltersForApi {
+    earliestCreatedDate: Date | null;
+    latestCreatedDate: Date | null;
+    salesReps: string[];
+    leadSources: string[];
+}
+
+function buildJobFilterQuery(filters: JobFiltersForApi): Record<string, string> {
+    const must: unknown[] = [];
+
+    if (filters.earliestCreatedDate || filters.latestCreatedDate) {
+        const range: Record<string, number> = {};
+        if (filters.earliestCreatedDate) {
+            range["gte"] = Math.floor(filters.earliestCreatedDate.getTime() / 1000);
+        }
+        if (filters.latestCreatedDate) {
+            range["lte"] = Math.floor(filters.latestCreatedDate.getTime() / 1000);
+        }
+        must.push({ "range": { "date_created": range } });
+    }
+
+    // if salesReps is empty, don't filter at all
+    if (filters.salesReps.length === 1) {
+        must.push({ "term": { "sales_rep_name": filters.salesReps[0] } });
+    } else if (filters.salesReps.length > 1) {
+        must.push({ "terms": { "sales_rep_name": filters.salesReps } });
+    }
+
+    // if leadSources is empty, don't filter at all
+    if (filters.leadSources.length === 1) {
+        must.push({ "term": { "source_name": filters.leadSources[0] } });
+    } else if (filters.leadSources.length > 1) {
+        must.push({ "terms": { "source_name": filters.leadSources } });
+    }
+
+    if (must.length === 0) {
+        return {};
+    }
+
+    return { "filter": JSON.stringify({ "must": must }) };
+}
+
 async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, params: Record<string, string>, resultKey: string): Promise<unknown[]> {
     const maxPerPage = 1000;
 
@@ -118,7 +161,11 @@ async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, para
     do {
         params["size"] = String(maxPerPage);
         params["from"] = String(results.length);
-        const response: unknown = await requestFromJobNimbus(apiKey, endpoint, params).then(r => r.json());
+        const rawResponse = await requestFromJobNimbus(apiKey, endpoint, params);
+        if (rawResponse === null) {
+            throw new Error(`Unexpected 304 during paginated fetch of ${endpoint}`);
+        }
+        const response: unknown = await rawResponse.json();
         assertObject(response);
 
         newResults = response[resultKey] as unknown[];
@@ -129,7 +176,24 @@ async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, para
     return results;
 }
 
-async function* getAllJobActivitiesUnparsedGenerator(apiKey: string | null): AsyncGenerator<unknown> {
+export async function getFilteredJobs(apiKey: string | null, filters: JobFiltersForApi, statuses: JobStatusRegistry): Promise<JobBaseData[]> {
+    const params = buildJobFilterQuery(filters);
+    const data = await getAllFromJobNimbus(apiKey, "jobs", params, "results");
+    return data.map(job => parseJobBaseData(job, statuses));
+}
+
+const ACTIVITY_JNID_BATCH_SIZE = 10;
+
+export async function* getActivitiesForJobs(apiKey: string | null, jobJnids: string[], statuses: JobStatusRegistry): AsyncGenerator<JnActivity> {
+    if (jobJnids.length === 0) return;
+
+    for (let i = 0; i < jobJnids.length; i += ACTIVITY_JNID_BATCH_SIZE) {
+        const batch = jobJnids.slice(i, i + ACTIVITY_JNID_BATCH_SIZE);
+        yield* getActivitiesBatch(apiKey, batch, statuses);
+    }
+}
+
+async function* getActivitiesBatch(apiKey: string | null, jobJnids: string[], statuses: JobStatusRegistry): AsyncGenerator<JnActivity> {
     const endpoint = "activities";
     const resultKey = "activity";
     const maxPerRequest = 1000;
@@ -139,31 +203,27 @@ async function* getAllJobActivitiesUnparsedGenerator(apiKey: string | null): Asy
     const dateKey = "date_created";
 
     let earliestDate: Date = new Date();
-
     let lastNumRetrieved = 0;
     let seenJnids: Set<string> = new Set();
     let numRequests = 0;
+
     do {
         const params = {
             "size": String(maxPerRequest),
             "filter": JSON.stringify({
                 "must": [
-                    {
-                        "term": {
-                            "primary.type": "job"
-                        }
-                    },
-                    {
-                        "range": {
-                            [dateKey]: {
-                                "lte": Math.floor(earliestDate.getTime() / 1000),
-                            }
-                        }
-                    }
+                    { "term": { "primary.type": "job" } },
+                    { "terms": { "primary.id": jobJnids } },
+                    { "range": { [dateKey]: { "lte": Math.floor(earliestDate.getTime() / 1000) } } },
                 ]
             }),
         };
-        const response: unknown = await requestFromJobNimbus(apiKey, endpoint, params).then(r => r.json());
+
+        const rawResponse = await requestFromJobNimbus(apiKey, endpoint, params);
+        if (rawResponse === null) {
+            throw new Error(`Unexpected 304 during paginated fetch of ${endpoint}`);
+        }
+        const response: unknown = await rawResponse.json();
         assertObject(response);
         const newResults = response[resultKey];
         assertArray(newResults);
@@ -178,7 +238,7 @@ async function* getAllJobActivitiesUnparsedGenerator(apiKey: string | null): Asy
             // because the date condition is <= instead of <
             const jnid = activity["jnid"] as string;
             if (!seenJnids.has(jnid)) {
-                yield activity;
+                yield parseJnActivity(activity, statuses);
             }
             nextSeenJnids.add(jnid);
 
@@ -192,32 +252,6 @@ async function* getAllJobActivitiesUnparsedGenerator(apiKey: string | null): Asy
         numRequests++;
         seenJnids = nextSeenJnids;
     } while (numRequests < 100 && lastNumRetrieved >= maxPerRequest);
-}
-
-export async function* getAllJobActivitiesUnparsed(apiKey: string | null): AsyncGenerator<unknown> {
-    yield* jnCacheLoadOrCalculateStream("activities", async function* () {
-        yield* getAllJobActivitiesUnparsedGenerator(apiKey);
-    });
-}
-
-export async function* getAllJobActivities(apiKey: string | null): AsyncGenerator<JnActivity> {
-    const statuses = await getJobStatuses(apiKey);
-    for await (const activity of getAllJobActivitiesUnparsed(apiKey)) {
-        yield parseJnActivity(activity, statuses);
-    }
-}
-
-export async function getAllJobBaseData(apiKey: string | null): Promise<JobBaseData[]> {
-    const data = await jnCacheLoadOrCalculate("base_data", async () => {
-        return await getAllFromJobNimbus(
-            apiKey,
-            "jobs",
-            {},
-            "results",
-        );
-    });
-    const statuses = await getJobStatuses(apiKey);
-    return data.map(job => parseJobBaseData(job, statuses));
 }
 
 function parseActivityBase(json: { [key: string]: unknown }): JnActivityBase {
