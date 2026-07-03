@@ -98,8 +98,11 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 		return salesReps.filter(salesRep => salesRep !== "").map(salesRep => ({ value: salesRep, label: salesRep }));
 	}, [salesReps]);
 	const leadSourceOptions = useMemo<LeadSourceOption[]>(() => {
-		return Object.values(leadSources).map(leadSource => ({ value: leadSource.name, label: leadSource.name }));
+		return Object.values(leadSources).map(leadSource => ({ value: leadSource.id, label: leadSource.name }));
 	}, [leadSources]);
+	const statusOptions = useMemo<StatusOption[]>(() => {
+		return Object.values(statuses).map(status => ({ value: status.id, label: status.name }));
+	}, [statuses]);
 
 	const [earliestCreatedDate, setEarliestCreatedDate] = useSavedState<string>(
 		"sales-kpis:filter_earliest_created_date",
@@ -119,11 +122,29 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 		(str) => JSON.parse(str) as string[],
 		() => [],
 	);
-	const [selectedLeadSources, setSelectedLeadSources] = useSavedState<string[]>(
-		"sales-kpis:filter_lead_sources",
+	const [selectedLeadSources, setSelectedLeadSources] = useSavedState<number[]>(
+		"sales-kpis:filter_lead_source_ids",
 		JSON.stringify,
-		(str) => JSON.parse(str) as string[],
+		(str) => JSON.parse(str) as number[],
 		() => [],
+	);
+	const [leadSourceFilterMode, setLeadSourceFilterMode] = useSavedState<FilterByMode>(
+		"sales-kpis:filter_lead_source_mode",
+		String,
+		(str) => str as FilterByMode,
+		() => "name",
+	);
+	const [selectedStatuses, setSelectedStatuses] = useSavedState<number[]>(
+		"sales-kpis:filter_status_ids",
+		JSON.stringify,
+		(str) => JSON.parse(str) as number[],
+		() => [],
+	);
+	const [statusFilterMode, setStatusFilterMode] = useSavedState<FilterByMode>(
+		"sales-kpis:filter_status_mode",
+		String,
+		(str) => str as FilterByMode,
+		() => "name",
 	);
 
 	const [plotlyLayout] = useState({
@@ -148,15 +169,29 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 				if (error instanceof ApiKeyError) throw error;
 				console.warn('Failed to refresh settings, using previously loaded values:', error);
 			}
-			void currentLeadSources;
-
 			setLoadingStatus('Fetching filtered jobs...');
+
+			const leadSourceNames: string[] = leadSourceFilterMode === 'name'
+				? Array.from(new Set(selectedLeadSources.map(id => currentLeadSources[id]?.name).filter((n): n is string => n != null)))
+				: [];
+			const leadSourceIds: number[] = leadSourceFilterMode === 'id'
+				? selectedLeadSources
+				: [];
+			const statusNames: string[] = statusFilterMode === 'name'
+				? Array.from(new Set(selectedStatuses.map(id => currentStatuses[id]?.name).filter((n): n is string => n != null)))
+				: [];
+			const statusIds: number[] = statusFilterMode === 'id'
+				? selectedStatuses
+				: [];
 
 			const apiFilters: JobFiltersForApi = {
 				earliestCreatedDate: earliestCreatedDate ? dateInputToLocalDate(earliestCreatedDate) : null,
 				latestCreatedDate: latestCreatedDate ? dateInputToLocalDate(latestCreatedDate) : null,
 				salesReps: selectedSalesReps,
-				leadSources: selectedLeadSources,
+				leadSourceNames,
+				leadSourceIds,
+				statusNames,
+				statusIds,
 			};
 
 			const jobs = await getFilteredJobs(apiKey, apiFilters, currentStatuses);
@@ -227,7 +262,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 
 						<div className="space-y-6">
 							<div>
-								<h3 className="mb-2 text-sm font-semibold text-slate-800">Status groups</h3>
+								<h3 className="mb-2 text-base font-bold text-slate-800">Status groups</h3>
 								<Button
 									type="button"
 									variant="secondary"
@@ -239,10 +274,10 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 							</div>
 
 							<div>
-								<h3 className="mb-3 text-sm font-semibold text-slate-800">Filter jobs</h3>
+								<h3 className="mb-3 text-base font-bold text-slate-800">Filter jobs</h3>
 								<div className="space-y-4">
 									<div>
-										<label className="mb-1 block text-xs font-medium text-slate-600">
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
 											Earliest job creation date
 										</label>
 										<Input
@@ -253,7 +288,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 										/>
 									</div>
 									<div>
-										<label className="mb-1 block text-xs font-medium text-slate-600">
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
 											Latest job creation date
 										</label>
 										<Input
@@ -264,7 +299,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 										/>
 									</div>
 										<div>
-										<label className="mb-1 block text-xs font-medium text-slate-600">
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
 											Filter by sales rep
 										</label>
 										<Select
@@ -287,9 +322,33 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 										/>
 									</div>
 									<div>
-										<label className="mb-1 block text-xs font-medium text-slate-600">
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
 											Filter by lead source
 										</label>
+										<div
+											className="mb-2 flex items-center gap-3 text-xs text-slate-600"
+											title="Lead sources have a display name, but are internally identified by a numeric ID in the JobNimbus database. Job records use both the ID and the name to refer to the associated lead source. If JobNimbus improperly updates the database, it can cause the job to be associated with two lead sources at once: one via the ID and another via the display name. Therefore, doing a search by ID vs name can sometimes give different results."
+										>
+											<span>Filter by:</span>
+											<label className="flex items-center gap-1">
+												<input
+													type="radio"
+													name="leadSourceFilterMode"
+													checked={leadSourceFilterMode === 'name'}
+													onChange={() => setLeadSourceFilterMode('name')}
+												/>
+												Name
+											</label>
+											<label className="flex items-center gap-1">
+												<input
+													type="radio"
+													name="leadSourceFilterMode"
+													checked={leadSourceFilterMode === 'id'}
+													onChange={() => setLeadSourceFilterMode('id')}
+												/>
+												ID
+											</label>
+										</div>
 										<Select
 											isMulti
 											menuPortalTarget={document.body}
@@ -297,10 +356,10 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 											styles={selectMenuStyles}
 											options={leadSourceOptions}
 											value={selectedLeadSources.map(
-												(name) =>
-													leadSourceOptions.find((option) => option.value === name) ?? {
-														value: name,
-														label: `Unknown lead source ${name}`,
+												(id) =>
+													leadSourceOptions.find((option) => option.value === id) ?? {
+														value: id,
+														label: `Unknown lead source with id ${id}`,
 													},
 											)}
 											onChange={(selected: MultiValue<LeadSourceOption>) => {
@@ -309,13 +368,60 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 											placeholder="Select lead sources (empty for all)"
 										/>
 									</div>
+									<div>
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
+											Filter by status
+										</label>
+										<div
+											className="mb-2 flex items-center gap-3 text-xs text-slate-600"
+											title="Statuses have a display name, but are internally identified by a numeric ID in the JobNimbus database. Job records use both the ID and the name to refer to the associated status. If JobNimbus improperly updates the database, it can cause the job to be associated with two statuses at once: one via the ID and another via the display name. Therefore, doing a search by ID vs name can sometimes give different results."
+										>
+											<span>Filter by:</span>
+											<label className="flex items-center gap-1">
+												<input
+													type="radio"
+													name="statusFilterMode"
+													checked={statusFilterMode === 'name'}
+													onChange={() => setStatusFilterMode('name')}
+												/>
+												Name
+											</label>
+											<label className="flex items-center gap-1">
+												<input
+													type="radio"
+													name="statusFilterMode"
+													checked={statusFilterMode === 'id'}
+													onChange={() => setStatusFilterMode('id')}
+												/>
+												ID
+											</label>
+										</div>
+										<Select
+											isMulti
+											menuPortalTarget={document.body}
+											menuPosition="fixed"
+											styles={selectMenuStyles}
+											options={statusOptions}
+											value={selectedStatuses.map(
+												(id) =>
+													statusOptions.find((option) => option.value === id) ?? {
+														value: id,
+														label: `Unknown (${id})`,
+													},
+											)}
+											onChange={(selected: MultiValue<StatusOption>) => {
+												setSelectedStatuses(selected.map((option) => option.value));
+											}}
+											placeholder="Select statuses (empty for all)"
+										/>
+									</div>
 								</div>
 							</div>
 
 							<div>
-								<h3 className="mb-3 text-sm font-semibold text-slate-800">Graph settings</h3>
+								<h3 className="mb-3 text-base font-bold text-slate-800">Graph settings</h3>
 								<div>
-									<label className="mb-1 block text-xs font-medium text-slate-600">
+									<label className="mb-1 block text-sm font-semibold text-slate-700">
 										Hide flows with fewer than <i>N</i> jobs
 									</label>
 									<Input
@@ -385,9 +491,16 @@ interface SalesRepOption {
 }
 
 interface LeadSourceOption {
-	value: string;
+	value: number;
 	label: string;
 }
+
+interface StatusOption {
+	value: number;
+	label: string;
+}
+
+type FilterByMode = 'name' | 'id';
 
 interface FilteredJobsTableProps {
 	jobs: JobBaseData[];
@@ -636,7 +749,7 @@ function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
 						)}
 					</div>
 
-					<h3 className="text-sm font-semibold text-slate-800 mb-2">Milestone dates</h3>
+					<h3 className="text-base font-bold text-slate-800 mb-2">Milestone dates</h3>
 					<div className="grid grid-cols-1 gap-x-8 gap-y-1 text-sm sm:grid-cols-2 mb-6">
 						{Object.entries(job.milestoneDates).map(([milestone, date]) => (
 							<div key={milestone}>
@@ -646,7 +759,7 @@ function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
 						))}
 					</div>
 
-					<h3 className="text-sm font-semibold text-slate-800 mb-2">
+					<h3 className="text-base font-bold text-slate-800 mb-2">
 						Activities ({sortedActivities.length})
 					</h3>
 					{sortedActivities.length === 0 ? (
@@ -726,4 +839,3 @@ function activityDetails(activity: JnActivity): React.ReactNode {
 }
 
 export default SalesKpisPage;
-

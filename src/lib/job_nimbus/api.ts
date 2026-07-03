@@ -117,7 +117,18 @@ export interface JobFiltersForApi {
     earliestCreatedDate: Date | null;
     latestCreatedDate: Date | null;
     salesReps: string[];
-    leadSources: string[];
+    leadSourceNames: string[];
+    leadSourceIds: number[];
+    statusNames: string[];
+    statusIds: number[];
+}
+
+function addTermsFilter(must: unknown[], field: string, values: string[] | number[]) {
+    if (values.length === 1) {
+        must.push({ "term": { [field]: values[0] } });
+    } else if (values.length > 1) {
+        must.push({ "terms": { [field]: values } });
+    }
 }
 
 function buildJobFilterQuery(filters: JobFiltersForApi): Record<string, string> {
@@ -134,19 +145,11 @@ function buildJobFilterQuery(filters: JobFiltersForApi): Record<string, string> 
         must.push({ "range": { "date_created": range } });
     }
 
-    // if salesReps is empty, don't filter at all
-    if (filters.salesReps.length === 1) {
-        must.push({ "term": { "sales_rep_name": filters.salesReps[0] } });
-    } else if (filters.salesReps.length > 1) {
-        must.push({ "terms": { "sales_rep_name": filters.salesReps } });
-    }
-
-    // if leadSources is empty, don't filter at all
-    if (filters.leadSources.length === 1) {
-        must.push({ "term": { "source_name": filters.leadSources[0] } });
-    } else if (filters.leadSources.length > 1) {
-        must.push({ "terms": { "source_name": filters.leadSources } });
-    }
+    addTermsFilter(must, "sales_rep_name", filters.salesReps);
+    addTermsFilter(must, "source_name", filters.leadSourceNames);
+    addTermsFilter(must, "source", filters.leadSourceIds);
+    addTermsFilter(must, "status_name", filters.statusNames);
+    addTermsFilter(must, "status", filters.statusIds);
 
     if (must.length === 0) {
         return {};
