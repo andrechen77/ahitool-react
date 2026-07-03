@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { FaExternalLinkAlt } from 'react-icons/fa';
 import Plot from 'react-plotly.js';
 import Select, { type MultiValue } from 'react-select';
 import type { JobBaseData, JnActivity, JobStatusRegistry, JobLeadSourceRegistry } from '../lib/job_nimbus/domain';
@@ -424,10 +425,11 @@ function FilteredJobsTable({
 						<table className="table w-full table-fixed text-sm">
 							<thead>
 								<tr className="table-header-row">
-									<th className="table-header-cell w-[33%] whitespace-nowrap">Name</th>
+									<th className="table-header-cell w-[30%] whitespace-nowrap">Name</th>
 									<th className="table-header-cell w-[18%] whitespace-nowrap">Created date</th>
-									<th className="table-header-cell w-[34%] whitespace-nowrap">Status</th>
-									<th className="table-header-cell w-[15%] whitespace-nowrap">Job no.</th>
+									<th className="table-header-cell w-[30%] whitespace-nowrap">Status</th>
+									<th className="table-header-cell w-[14%] whitespace-nowrap">Job no.</th>
+									<th className="table-header-cell w-[8%]"></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -444,16 +446,8 @@ function FilteredJobsTable({
 										<tr
 											key={job.jnid}
 											className="table-row cursor-pointer hover:bg-slate-50"
-											role="link"
 											tabIndex={0}
-											title="Open job in JobNimbus"
-											onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}
-											onKeyDown={(e) => {
-												if (e.key === 'Enter' || e.key === ' ') {
-													e.preventDefault();
-													window.open(href, '_blank', 'noopener,noreferrer');
-												}
-											}}
+											onClick={() => {}}
 										>
 											<TruncatedTableCell title={name}>{name}</TruncatedTableCell>
 											<TruncatedTableCell title={createdDate}>
@@ -463,6 +457,18 @@ function FilteredJobsTable({
 											<TruncatedTableCell title={jobNumber}>
 												{jobNumber}
 											</TruncatedTableCell>
+											<td className="table-cell text-center">
+												<a
+													href={href}
+													target="_blank"
+													rel="noopener noreferrer"
+													title="Open in JobNimbus"
+													onClick={(e) => e.stopPropagation()}
+													className="inline-flex items-center text-slate-400 hover:text-slate-700"
+												>
+													<FaExternalLinkAlt size={12} />
+												</a>
+											</td>
 										</tr>
 									);
 								})}
