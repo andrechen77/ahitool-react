@@ -57,6 +57,8 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 	const [statusGroups, setStatusGroups] = useState<StatusGroup[]>([]);
 	const [filteredJobs, setFilteredJobs] = useState<JobBaseData[]>([]);
 	const [filteredJobsPage, setFilteredJobsPage] = useState(0);
+	const [activitiesByJobJnid, setActivitiesByJobJnid] = useState<Record<string, JnActivity[]>>({});
+	const [selectedJobJnid, setSelectedJobJnid] = useState<string | null>(null);
 	const [hasGenerated, setHasGenerated] = useState(false);
 	const [isLoadingResults, setIsLoadingResults] = useState(false);
 	const [loadingStatus, setLoadingStatus] = useState('');
@@ -188,6 +190,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 				}
 			}
 
+			setActivitiesByJobJnid(activitiesByJobJnid);
 			setLoadingStatus('Processing results...');
 
 			const statusGroupsObj = statusGroupsToRecord(statusGroups);
@@ -340,8 +343,19 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 							page={filteredJobsPage}
 							onPageChange={setFilteredJobsPage}
 							hasGenerated={hasGenerated}
+							onJobClick={setSelectedJobJnid}
 						/>
 					</Card>
+					{selectedJobJnid && (
+						<Card>
+							<JobInfoPanel
+								jnid={selectedJobJnid}
+								job={filteredJobs.find(j => j.jnid === selectedJobJnid) ?? null}
+								activities={activitiesByJobJnid[selectedJobJnid] ?? []}
+								onClose={() => setSelectedJobJnid(null)}
+							/>
+						</Card>
+					)}
 					<Card className="flex-1">
 						<h2 className="mb-2">Sankey Diagram</h2>
 						<Plot
@@ -381,6 +395,7 @@ interface FilteredJobsTableProps {
 	page: number;
 	onPageChange: (page: number) => void;
 	hasGenerated: boolean;
+	onJobClick: (jnid: string) => void;
 }
 
 function FilteredJobsTable({
@@ -389,6 +404,7 @@ function FilteredJobsTable({
 	page,
 	onPageChange,
 	hasGenerated,
+	onJobClick,
 }: FilteredJobsTableProps) {
 	const statusNameToGroup = useMemo(
 		() => buildStatusNameToGroupMap(statusGroups),
@@ -447,7 +463,7 @@ function FilteredJobsTable({
 											key={job.jnid}
 											className="table-row cursor-pointer hover:bg-slate-50"
 											tabIndex={0}
-											onClick={() => {}}
+											onClick={() => onJobClick(job.jnid)}
 										>
 											<TruncatedTableCell title={name}>{name}</TruncatedTableCell>
 											<TruncatedTableCell title={createdDate}>
@@ -540,4 +556,174 @@ function dateInputToLocalDate(value: string) {
 	return new Date(y, m - 1, d);
 }
 
+function formatCents(cents: number): string {
+	return `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+interface JobInfoPanelProps {
+	jnid: string;
+	job: JobBaseData | null;
+	activities: JnActivity[];
+	onClose: () => void;
+}
+
+function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
+	const sortedActivities = useMemo(
+		() => [...activities].sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()),
+		[activities],
+	);
+
+	return (
+		<div>
+			<div className="flex items-center justify-between mb-4">
+				<h2>Info for job {jnid}</h2>
+				<Button variant="ghost" size="sm" onClick={onClose}>
+					Close
+				</Button>
+			</div>
+
+			{job === null ? (
+				<p className="text-sm text-slate-500">Job not found in filtered results.</p>
+			) : (
+				<>
+					<div className="grid grid-cols-1 gap-x-8 gap-y-2 text-sm sm:grid-cols-2 mb-6">
+						<div>
+							<span className="font-semibold text-slate-700">Name:</span>{' '}
+							{job.jobName ?? '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Job number:</span>{' '}
+							{job.jobNumber ?? '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Status:</span>{' '}
+							{job.status.name}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Status last changed:</span>{' '}
+							{job.statusModDate ? formatJobDate(job.statusModDate) : '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Created:</span>{' '}
+							{formatJobDate(job.createdDate)}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">State:</span>{' '}
+							{job.state || '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Sales rep:</span>{' '}
+							{job.salesRep ?? '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Lead source:</span>{' '}
+							{job.leadSourceName ?? '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Amount receivable:</span>{' '}
+							{job.amtReceivable > 0 ? formatCents(job.amtReceivable) : '—'}
+						</div>
+						<div>
+							<span className="font-semibold text-slate-700">Insurance:</span>{' '}
+							{job.insuranceCheckbox ? 'Yes' : 'No'}
+							{job.insuranceCompanyName && ` (${job.insuranceCompanyName})`}
+						</div>
+						{job.insuranceClaimNumber && (
+							<div>
+								<span className="font-semibold text-slate-700">Claim #:</span>{' '}
+								{job.insuranceClaimNumber}
+							</div>
+						)}
+					</div>
+
+					<h3 className="text-sm font-semibold text-slate-800 mb-2">Milestone dates</h3>
+					<div className="grid grid-cols-1 gap-x-8 gap-y-1 text-sm sm:grid-cols-2 mb-6">
+						{Object.entries(job.milestoneDates).map(([milestone, date]) => (
+							<div key={milestone}>
+								<span className="font-medium text-slate-600">{milestone}:</span>{' '}
+								{date ? formatJobDate(date) : '—'}
+							</div>
+						))}
+					</div>
+
+					<h3 className="text-sm font-semibold text-slate-800 mb-2">
+						Activities ({sortedActivities.length})
+					</h3>
+					{sortedActivities.length === 0 ? (
+						<p className="text-sm text-slate-500">No activities found for this job.</p>
+					) : (
+						<div className="max-h-96 overflow-y-auto border border-slate-200 rounded-md">
+							<table className="table w-full text-sm">
+								<thead className="table-header-sticky">
+									<tr className="table-header-row">
+										<th className="table-header-cell whitespace-nowrap">Date</th>
+										<th className="table-header-cell whitespace-nowrap">Type</th>
+										<th className="table-header-cell whitespace-nowrap">Details</th>
+									</tr>
+								</thead>
+								<tbody>
+									{sortedActivities.map((activity, index) => (
+										<tr key={index} className="table-row">
+											<td className="table-cell whitespace-nowrap">
+												{formatJobDate(activity.timestamp)}
+											</td>
+											<td className="table-cell whitespace-nowrap">
+												{activityTypeLabel(activity)}
+											</td>
+											<td className="table-cell">
+												{activityDetails(activity)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					)}
+				</>
+			)}
+		</div>
+	);
+}
+
+function activityTypeLabel(activity: JnActivity): string {
+	switch (activity.type) {
+		case 'job_created': return 'Job Created';
+		case 'status_changed': return 'Status Changed';
+		case 'job_modified': return 'Job Modified';
+		case 'generic': return activity.recordTypeName;
+	}
+}
+
+function activityDetails(activity: JnActivity): React.ReactNode {
+	switch (activity.type) {
+		case 'job_created':
+			return <span className="text-slate-500">Job was created</span>;
+		case 'status_changed':
+			return (
+				<span>
+					<span className="text-slate-500">{activity.oldStatusName}</span>
+					{' → '}
+					<span className="font-medium">{activity.newStatusName}</span>
+				</span>
+			);
+		case 'job_modified': {
+			const entries = Object.entries(activity.updates);
+			if (entries.length === 0) return <span className="text-slate-500">{activity.note || '—'}</span>;
+			return (
+				<span>
+					{entries.map(([field, [oldVal, newVal]], i) => (
+						<span key={field}>
+							{i > 0 && '; '}
+							<span className="font-medium">{field}</span>: {oldVal || '(empty)'} → {newVal || '(empty)'}
+						</span>
+					))}
+				</span>
+			);
+		}
+		case 'generic':
+			return <span className="text-slate-500">{activity.note || '—'}</span>;
+	}
+}
+
 export default SalesKpisPage;
+
