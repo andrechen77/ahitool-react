@@ -45,7 +45,9 @@ export interface JobBaseData {
     jobNumber: string | null;
     jobName: string | null;
     state: string;
-    leadSourceName: string | null;
+    leadSource: JobLeadSource | null;
+    // Non-null only when the name in the raw data doesn't match the registry name for this lead source ID
+    leadSourceNameMismatch: string | null;
     // amount in cents
     amtReceivable: number;
 }

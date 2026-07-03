@@ -194,7 +194,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 				statusIds,
 			};
 
-			const jobs = await getFilteredJobs(apiKey, apiFilters, currentStatuses);
+			const jobs = await getFilteredJobs(apiKey, apiFilters, currentStatuses, currentLeadSources);
 			const jobsByJnid = jobs.reduce((acc, job) => {
 				acc[job.jnid] = job;
 				return acc;
@@ -730,8 +730,16 @@ function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
 						</div>
 						<div>
 							<span className="font-semibold text-slate-700">Lead source:</span>{' '}
-							{job.leadSourceName ?? '—'}
+							{job.leadSource ? `${job.leadSource.name} (ID: ${job.leadSource.id})` : '—'}
 						</div>
+						{job.leadSourceNameMismatch && (
+							<div>
+								<span className="font-semibold text-amber-700">Lead source name mismatch:</span>{' '}
+								<span className="text-amber-600">
+									Raw name is &quot;{job.leadSourceNameMismatch}&quot; but registry says &quot;{job.leadSource?.name}&quot;
+								</span>
+							</div>
+						)}
 						<div>
 							<span className="font-semibold text-slate-700">Amount receivable:</span>{' '}
 							{job.amtReceivable > 0 ? formatCents(job.amtReceivable) : '—'}

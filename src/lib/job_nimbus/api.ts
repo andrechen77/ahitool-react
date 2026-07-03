@@ -181,10 +181,10 @@ async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, para
     return results;
 }
 
-export async function getFilteredJobs(apiKey: string | null, filters: JobFiltersForApi, statuses: JobStatusRegistry): Promise<JobBaseData[]> {
+export async function getFilteredJobs(apiKey: string | null, filters: JobFiltersForApi, statuses: JobStatusRegistry, leadSources: JobLeadSourceRegistry): Promise<JobBaseData[]> {
     const params = buildJobFilterQuery(filters);
     const data = await getAllFromJobNimbus(apiKey, "jobs", params, "results");
-    return data.map(job => parseJobBaseData(job, statuses));
+    return data.map(job => parseJobBaseData(job, statuses, leadSources));
 }
 
 const ACTIVITY_JNID_BATCH_SIZE = 10;
@@ -402,12 +402,14 @@ const RAW_JOB_BASE_DATA_KEYS = {
     CONTRACT_DATE: "Signed Contract Date",
     INSTALL_DATE: "Install Date",
     LOSS_DATE: "Job Lost Date (Lost Status)",
+    LEAD_SOURCE_ID: "source",
     LEAD_SOURCE_NAME: "source_name",
 }
 
 export function parseJobBaseData(
     raw: unknown,
     statuses: JobStatusRegistry,
+    leadSources: JobLeadSourceRegistry,
 ): JobBaseData {
     assertObject(raw);
 
@@ -463,7 +465,17 @@ export function parseJobBaseData(
     const insuranceClaimNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.INSURANCE_CLAIM_NUMBER);
     const jobNumber = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NUMBER);
     const jobName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.JOB_NAME);
-    const leadSourceName = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.LEAD_SOURCE_NAME);
+
+    // resolve lead source by ID, then check for name mismatch
+    const leadSourceId = getNumber(RAW_JOB_BASE_DATA_KEYS.LEAD_SOURCE_ID);
+    const leadSourceNameRaw = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.LEAD_SOURCE_NAME);
+    const leadSource = leadSourceId != null ? (leadSources[leadSourceId] ?? null) : null;
+    let leadSourceNameMismatch: string | null = null;
+    if (leadSourceNameRaw) {
+        if (!leadSource || leadSourceNameRaw !== leadSource.name) {
+            leadSourceNameMismatch = leadSourceNameRaw;
+        }
+    }
 
     // get the amount receivable
     let amtReceivable = 0;
@@ -495,7 +507,8 @@ export function parseJobBaseData(
         insuranceCompanyName,
         jobNumber,
         jobName,
-        leadSourceName,
+        leadSource,
+        leadSourceNameMismatch,
         amtReceivable,
     };
 }
