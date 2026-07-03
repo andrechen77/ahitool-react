@@ -2,7 +2,7 @@
 
 import { assertArray, assertObject } from "../types";
 import { JobMilestone } from "./domain";
-import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobStatus, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
+import type { JobBaseData, JobStatusRegistry, JobLeadSourceRegistry, JobLocationRegistry, JobStatus, JobLocation, MilestoneDates, JnActivity, JobLeadSource, JnActivityBase } from "./domain";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? ""; // empty => same origin
 
@@ -64,6 +64,7 @@ async function getSettings(apiKey: string | null): Promise<unknown | null> {
 export async function getStatusesAndLeadSources(apiKey: string | null): Promise<{
     statuses: JobStatusRegistry;
     leadSources: JobLeadSourceRegistry;
+    locations: JobLocationRegistry;
 } | null> {
     const settings = await getSettings(apiKey);
     if (settings === null) return null;
@@ -92,7 +93,16 @@ export async function getStatusesAndLeadSources(apiKey: string | null): Promise<
             return acc;
         }, {});
 
-    return { statuses, leadSources };
+    assertArray(settings["locations"]);
+    const locations: JobLocationRegistry = settings["locations"]
+        .reduce((acc: Record<number, JobLocation>, loc: any) => {
+            const id = Number(loc["id"]);
+            const name = String(loc["name"]);
+            acc[id] = { id, name };
+            return acc;
+        }, {});
+
+    return { statuses, leadSources, locations };
 }
 
 export async function getSalesReps(apiKey: string | null): Promise<string[] | null> {
@@ -121,6 +131,7 @@ export interface JobFiltersForApi {
     leadSourceIds: number[];
     statusNames: string[];
     statusIds: number[];
+    locationIds: number[];
 }
 
 function addTermsFilter(must: unknown[], field: string, values: string[] | number[]) {
@@ -150,6 +161,7 @@ function buildJobFilterQuery(filters: JobFiltersForApi): Record<string, string> 
     addTermsFilter(must, "source", filters.leadSourceIds);
     addTermsFilter(must, "status_name", filters.statusNames);
     addTermsFilter(must, "status", filters.statusIds);
+    addTermsFilter(must, "location.id", filters.locationIds);
 
     if (must.length === 0) {
         return {};
@@ -181,10 +193,10 @@ async function getAllFromJobNimbus(apiKey: string | null, endpoint: string, para
     return results;
 }
 
-export async function getFilteredJobs(apiKey: string | null, filters: JobFiltersForApi, statuses: JobStatusRegistry, leadSources: JobLeadSourceRegistry): Promise<JobBaseData[]> {
+export async function getFilteredJobs(apiKey: string | null, filters: JobFiltersForApi, statuses: JobStatusRegistry, leadSources: JobLeadSourceRegistry, locations: JobLocationRegistry): Promise<JobBaseData[]> {
     const params = buildJobFilterQuery(filters);
     const data = await getAllFromJobNimbus(apiKey, "jobs", params, "results");
-    return data.map(job => parseJobBaseData(job, statuses, leadSources));
+    return data.map(job => parseJobBaseData(job, statuses, leadSources, locations));
 }
 
 const ACTIVITY_JNID_BATCH_SIZE = 10;
@@ -387,7 +399,6 @@ function parseJnActivity(
 const RAW_JOB_BASE_DATA_KEYS = {
     JNID: "jnid",
     STATUS: "status",
-    STATE: "state_text",
     DATE_CREATED: "date_created",
     DATE_STATUS_CHANGE: "date_status_change",
     SALES_REP_NAME: "sales_rep_name",
@@ -404,12 +415,14 @@ const RAW_JOB_BASE_DATA_KEYS = {
     LOSS_DATE: "Job Lost Date (Lost Status)",
     LEAD_SOURCE_ID: "source",
     LEAD_SOURCE_NAME: "source_name",
+    LOCATION: "location",
 }
 
 export function parseJobBaseData(
     raw: unknown,
     statuses: JobStatusRegistry,
     leadSources: JobLeadSourceRegistry,
+    locations: JobLocationRegistry,
 ): JobBaseData {
     assertObject(raw);
 
@@ -445,17 +458,19 @@ export function parseJobBaseData(
 
     // get the job status
     const statusIdValue = getNumber(RAW_JOB_BASE_DATA_KEYS.STATUS);
-    const status = statusIdValue ? statuses[statusIdValue] : undefined;
-    if (!status) {
-        throw new Error(`Unknown status id: ${statusIdValue}`);
-    }
+    const status = statusIdValue != null ? (statuses[statusIdValue] ?? null) : null;
 
     // get the last status update
     const statusModDate = getTimestampNonZero(RAW_JOB_BASE_DATA_KEYS.DATE_STATUS_CHANGE);
 
-    const state = getNonEmptyString(RAW_JOB_BASE_DATA_KEYS.STATE) ?? "";
-    if (state === "") {
-        console.warn(`Missing or invalid state field for job ${jnid}`);
+    // resolve location
+    const locationRaw = raw[RAW_JOB_BASE_DATA_KEYS.LOCATION];
+    let location: JobLocation | null = null;
+    if (locationRaw && typeof locationRaw === "object" && !Array.isArray(locationRaw)) {
+        const locId = (locationRaw as Record<string, unknown>)["id"];
+        if (typeof locId === "number") {
+            location = locations[locId] ?? null;
+        }
     }
 
     // optional fields
@@ -497,7 +512,6 @@ export function parseJobBaseData(
     return {
         jnid,
         createdDate,
-        state,
         milestoneDates,
         status,
         statusModDate,
@@ -507,6 +521,7 @@ export function parseJobBaseData(
         insuranceCompanyName,
         jobNumber,
         jobName,
+        location,
         leadSource,
         leadSourceNameMismatch,
         amtReceivable,

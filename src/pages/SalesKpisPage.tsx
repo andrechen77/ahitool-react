@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { FaExternalLinkAlt } from 'react-icons/fa';
 import Plot from 'react-plotly.js';
 import Select, { type MultiValue } from 'react-select';
-import type { JobBaseData, JnActivity, JobStatusRegistry, JobLeadSourceRegistry } from '../lib/job_nimbus/domain';
+import type { JobBaseData, JnActivity, JobStatusRegistry, JobLeadSourceRegistry, JobLocationRegistry } from '../lib/job_nimbus/domain';
 import { generateKpiGraph, type KpiSankeyData } from '../lib/job_nimbus/kpi';
 import JnClient from '../components/JnClient';
 import { StatusGroupsModal } from '../components/StatusGroupsModal';
@@ -50,7 +50,7 @@ function SalesKpisPage() {
 }
 
 function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
-	const { statuses, leadSources, salesReps } = metadata;
+	const { statuses, leadSources, locations, salesReps } = metadata;
 	const { apiKey } = useApiKey();
 
 	const [statusGroupsModalOpen, setStatusGroupsModalOpen] = useState(false);
@@ -103,6 +103,9 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 	const statusOptions = useMemo<StatusOption[]>(() => {
 		return Object.values(statuses).map(status => ({ value: status.id, label: status.name }));
 	}, [statuses]);
+	const locationOptions = useMemo<LocationOption[]>(() => {
+		return Object.values(locations).map(loc => ({ value: loc.id, label: loc.name }));
+	}, [locations]);
 
 	const [earliestCreatedDate, setEarliestCreatedDate] = useSavedState<string>(
 		"sales-kpis:filter_earliest_created_date",
@@ -146,6 +149,12 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 		(str) => str as FilterByMode,
 		() => "name",
 	);
+	const [selectedLocations, setSelectedLocations] = useSavedState<number[]>(
+		"sales-kpis:filter_location_ids",
+		JSON.stringify,
+		(str) => JSON.parse(str) as number[],
+		() => [],
+	);
 
 	const [plotlyLayout] = useState({
 		autosize: true,
@@ -158,12 +167,14 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 		try {
 			let currentStatuses: JobStatusRegistry = statuses;
 			let currentLeadSources: JobLeadSourceRegistry = leadSources;
+			let currentLocations: JobLocationRegistry = locations;
 
 			try {
 				const fresh = await getStatusesAndLeadSources(apiKey);
 				if (fresh !== null) {
 					currentStatuses = fresh.statuses;
 					currentLeadSources = fresh.leadSources;
+					currentLocations = fresh.locations;
 				}
 			} catch (error) {
 				if (error instanceof ApiKeyError) throw error;
@@ -192,9 +203,10 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 				leadSourceIds,
 				statusNames,
 				statusIds,
+				locationIds: selectedLocations,
 			};
 
-			const jobs = await getFilteredJobs(apiKey, apiFilters, currentStatuses, currentLeadSources);
+			const jobs = await getFilteredJobs(apiKey, apiFilters, currentStatuses, currentLeadSources, currentLocations);
 			const jobsByJnid = jobs.reduce((acc, job) => {
 				acc[job.jnid] = job;
 				return acc;
@@ -415,6 +427,30 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 											placeholder="Select statuses (empty for all)"
 										/>
 									</div>
+
+									<div>
+										<label className="mb-1 block text-sm font-semibold text-slate-700">
+											Location
+										</label>
+										<Select
+											isMulti
+											menuPortalTarget={document.body}
+											menuPosition="fixed"
+											styles={selectMenuStyles}
+											options={locationOptions}
+											value={selectedLocations.map(
+												(id) =>
+													locationOptions.find((option) => option.value === id) ?? {
+														value: id,
+														label: `Unknown (${id})`,
+													},
+											)}
+											onChange={(selected: MultiValue<LocationOption>) => {
+												setSelectedLocations(selected.map((option) => option.value));
+											}}
+											placeholder="Select locations (empty for all)"
+										/>
+									</div>
 								</div>
 							</div>
 
@@ -496,6 +532,11 @@ interface LeadSourceOption {
 }
 
 interface StatusOption {
+	value: number;
+	label: string;
+}
+
+interface LocationOption {
 	value: number;
 	label: string;
 }
@@ -721,8 +762,8 @@ function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
 							{formatJobDate(job.createdDate)}
 						</div>
 						<div>
-							<span className="font-semibold text-slate-700">State:</span>{' '}
-							{job.state || '—'}
+							<span className="font-semibold text-slate-700">Location:</span>{' '}
+							{job.location ? `${job.location.name} (ID: ${job.location.id})` : '—'}
 						</div>
 						<div>
 							<span className="font-semibold text-slate-700">Sales rep:</span>{' '}

@@ -1,11 +1,12 @@
 import { createContext, useContext, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ApiKeyError, getSalesReps, getStatusesAndLeadSources } from '../lib/job_nimbus/api';
-import type { JobStatusRegistry, JobLeadSourceRegistry } from '../lib/job_nimbus/domain';
+import type { JobStatusRegistry, JobLeadSourceRegistry, JobLocationRegistry } from '../lib/job_nimbus/domain';
 
 export interface JobNimbusMetadata {
 	statuses: JobStatusRegistry;
 	leadSources: JobLeadSourceRegistry;
+	locations: JobLocationRegistry;
 	salesReps: string[];
 }
 
@@ -36,6 +37,7 @@ export function JobNimbusDataProvider({ children }: { children: ReactNode }) {
 			setMetadata(prev => ({
 				statuses: settingsResult?.statuses ?? prev?.statuses ?? {},
 				leadSources: settingsResult?.leadSources ?? prev?.leadSources ?? {},
+				locations: settingsResult?.locations ?? prev?.locations ?? {},
 				salesReps: salesRepsResult ?? prev?.salesReps ?? [],
 			}));
 		} finally {

@@ -7,13 +7,14 @@ import { Card } from './ui/Card';
 import { cn } from '../util/cn';
 import { ApiKeyError } from '../lib/job_nimbus/api';
 
-type Tab = 'apiKey' | 'overview' | 'statuses' | 'leadSources' | 'salesReps';
+type Tab = 'apiKey' | 'overview' | 'statuses' | 'leadSources' | 'locations' | 'salesReps';
 
 function JnClient() {
 	const { metadata, isLoadingMetadata, loadMetadata } = useJobNimbusData();
 
 	const statuses = metadata?.statuses ?? {};
 	const leadSources = metadata?.leadSources ?? {};
+	const locations = metadata?.locations ?? {};
 
 	const { apiKey, openModal } = useApiKey();
 	const [activeTab, setActiveTab] = useState<Tab>('overview');
@@ -29,6 +30,7 @@ function JnClient() {
 
 	const statusesArray = Object.values(statuses);
 	const leadSourcesArray = Object.values(leadSources);
+	const locationsArray = Object.values(locations);
 
 	const handleRefresh = async () => {
 		try {
@@ -84,6 +86,9 @@ function JnClient() {
 					<TabButton tab="leadSources" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Lead Sources
 					</TabButton>
+					<TabButton tab="locations" activeTab={activeTab} setActiveTab={setActiveTab}>
+						Locations
+					</TabButton>
 					<TabButton tab="salesReps" activeTab={activeTab} setActiveTab={setActiveTab}>
 						Sales Reps
 					</TabButton>
@@ -107,6 +112,9 @@ function JnClient() {
 					</p>
 					<p>
 						<span className="font-semibold">Lead sources:</span> {Object.keys(leadSources).length}
+					</p>
+					<p>
+						<span className="font-semibold">Locations:</span> {Object.keys(locations).length}
 					</p>
 					<p>
 						<span className="font-semibold">Sales reps:</span> {metadata?.salesReps.length ?? 0}
@@ -149,6 +157,27 @@ function JnClient() {
 								<tr key={source.id} className="table-row">
 									<td className="table-cell">{source.id}</td>
 									<td className="table-cell">{source.name}</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			)}
+
+			{activeTab === 'locations' && (
+				<div className="max-h-96 overflow-y-auto border border-slate-200 rounded-md">
+					<table className="table">
+						<thead className="table-header-sticky">
+							<tr className="table-header-row">
+								<th className="table-header-cell">Internal ID</th>
+								<th className="table-header-cell">Name</th>
+							</tr>
+						</thead>
+						<tbody>
+							{locationsArray.map((loc) => (
+								<tr key={loc.id} className="table-row">
+									<td className="table-cell">{loc.id}</td>
+									<td className="table-cell">{loc.name}</td>
 								</tr>
 							))}
 						</tbody>

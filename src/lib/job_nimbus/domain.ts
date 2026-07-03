@@ -32,11 +32,17 @@ export interface JobLeadSource {
 }
 export type JobLeadSourceRegistry = Record<number, JobLeadSource>;
 
+export interface JobLocation {
+    id: number;
+    name: string;
+}
+export type JobLocationRegistry = Record<number, JobLocation>;
+
 export interface JobBaseData {
     jnid: string;
     createdDate: Date;
     milestoneDates: MilestoneDates;
-    status: JobStatus;
+    status: JobStatus | null;
     statusModDate: Date | null;
     salesRep: string | null;
     insuranceCheckbox: boolean;
@@ -44,7 +50,7 @@ export interface JobBaseData {
     insuranceCompanyName: string | null;
     jobNumber: string | null;
     jobName: string | null;
-    state: string;
+    location: JobLocation | null;
     leadSource: JobLeadSource | null;
     // Non-null only when the name in the raw data doesn't match the registry name for this lead source ID
     leadSourceNameMismatch: string | null;
