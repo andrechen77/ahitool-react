@@ -169,8 +169,8 @@ function JnClient() {
 								</tr>
 							</thead>
 							<tbody>
-								{(metadata?.salesReps ?? []).map((name) => (
-									<tr key={name} className="table-row">
+								{(metadata?.salesReps ?? []).map((name, index) => (
+									<tr key={index} className="table-row">
 										<td className="table-cell">{name}</td>
 									</tr>
 								))}

@@ -104,11 +104,13 @@ export async function getSalesReps(apiKey: string | null): Promise<string[] | nu
     const users = data["users"];
     assertArray(users);
 
-    return users.map((user: any) => {
+    const names = users.map((user: any) => {
         const first = String(user["first_name"] ?? "").trim();
         const last = String(user["last_name"] ?? "").trim();
         return [first, last].filter(Boolean).join(" ");
     }).filter((name: string) => name !== "");
+
+    return Array.from(new Set(names));
 }
 
 export interface JobFiltersForApi {
