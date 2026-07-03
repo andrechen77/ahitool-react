@@ -310,7 +310,7 @@ function SalesKpisContent({ metadata }: { metadata: JobNimbusMetadata }) {
 											onChange={(e) => setLatestCreatedDate(e.target.value)}
 										/>
 									</div>
-										<div>
+									<div>
 										<label className="mb-1 block text-sm font-semibold text-slate-700">
 											Filter by sales rep
 										</label>
@@ -608,7 +608,7 @@ function FilteredJobsTable({
 									const name = job.jobName ?? '—';
 									const createdDate = formatJobDate(job.createdDate);
 									const status = formatJobStatusWithGroup(
-										job.status.name,
+										job.status?.name ?? "—",
 										statusNameToGroup,
 									);
 									const jobNumber = job.jobNumber ?? '—';
@@ -751,7 +751,7 @@ function JobInfoPanel({ jnid, job, activities, onClose }: JobInfoPanelProps) {
 						</div>
 						<div>
 							<span className="font-semibold text-slate-700">Status:</span>{' '}
-							{job.status.name}
+							{job.status?.name ?? "—"}
 						</div>
 						<div>
 							<span className="font-semibold text-slate-700">Status last changed:</span>{' '}

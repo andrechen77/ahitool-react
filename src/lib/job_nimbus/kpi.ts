@@ -34,6 +34,9 @@ function constructJobStatusHistory(baseData: JobBaseData, activities: JnActivity
     // check consistency of the current status
     const lastEntry = history.at(-1);
     const currentStatus = baseData.status;
+    if (currentStatus === null) {
+        throw new Error(`Job ${baseData.jnid} has no current status`);
+    }
     const currentStatusModDate = baseData.statusModDate;
     if (lastEntry) {
         if (lastEntry.status === null) {
@@ -84,15 +87,20 @@ export async function generateKpiGraph(
     let invisibleJobs: string[] = [];
     for (const [jobJnid, job] of Object.entries(jobsByJnid)) {
         const activities = activitiesByJobJnid[jobJnid] ?? [];
-        const { history, inconsistencies } = constructJobStatusHistory(job, activities);
-        for (const inconsistency of inconsistencies) {
-            if (inconsistency === history.length) {
-                console.warn(`Job status history inconsistency detected for job ${jobJnid}: final status does not match history`)
-            } else {
-                console.warn(`Job status history inconsistency detected for job ${jobJnid}: at ${history[inconsistency].timestamp}`);
+        let numEdges = 0;
+        try {
+            const { history, inconsistencies } = constructJobStatusHistory(job, activities);
+            for (const inconsistency of inconsistencies) {
+                if (inconsistency === history.length) {
+                    console.warn(`Job status history inconsistency detected for job ${jobJnid}: final status does not match history`)
+                } else {
+                    console.warn(`Job status history inconsistency detected for job ${jobJnid}: at ${history[inconsistency].timestamp}`);
+                }
             }
+            numEdges = jobGraph.addJob(jobJnid, history);
+        } catch (error) {
+            console.warn(`Error constructing job status history for job ${jobJnid}: ${error}`);
         }
-        const numEdges = jobGraph.addJob(jobJnid, history);
         if (numEdges === 0) {
             invisibleJobs.push(jobJnid);
         }
